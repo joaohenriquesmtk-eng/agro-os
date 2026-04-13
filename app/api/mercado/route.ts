@@ -1,36 +1,30 @@
 import { NextResponse } from 'next/server';
 
-// Garante que a Vercel nunca use dados velhos do cache
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const headers = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept': 'application/json',
-    };
-
-    // 1. Dólar (AwesomeAPI) - Blindado e estável
-    const respDolar = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL', { 
-        cache: 'no-store', 
-        headers 
-    });
+    // 1. Dólar (AwesomeAPI) - Direto, pois eles não bloqueiam a Vercel
+    const respDolar = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL', { cache: 'no-store' });
     const dadosDolar = await respDolar.json();
     const dolarAtual = parseFloat(dadosDolar.USDBRL.bid);
 
-    // 2. A MÁGICA: O Tiro de Sniper. Busca todas as commodities em uma única requisição.
-    // Isso evita o bloqueio de Rate Limit (Muitas Requisições) do Yahoo contra a Vercel.
+    // 2. A ROTA ALTERNATIVA: O Túnel (Proxy Global)
     const urlYahoo = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=ZS=F,ZC=F,ZW=F,CT=F,SB=F';
-    const respYahoo = await fetch(urlYahoo, { cache: 'no-store', headers });
+    
+    // Envolvemos a URL do Yahoo dentro do AllOrigins (Raw Mode para devolver o JSON puro)
+    const urlProxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlYahoo)}`;
+
+    const respYahoo = await fetch(urlProxy, { cache: 'no-store' });
     
     if (!respYahoo.ok) {
-        throw new Error(`Yahoo bloqueou a requisição única. Status: ${respYahoo.status}`);
+        throw new Error(`Falha no Túnel. Status: ${respYahoo.status}`);
     }
     
     const dadosYahoo = await respYahoo.json();
     const resultados = dadosYahoo.quoteResponse.result;
 
-    // Função inteligente para achar o preço no meio do pacote de dados
+    // Função inteligente para achar o preço
     const getPreco = (simbolo: string) => {
         const ativo = resultados.find((r: any) => r.symbol === simbolo);
         return ativo ? ativo.regularMarketPrice : 0;
