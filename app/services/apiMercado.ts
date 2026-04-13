@@ -3,54 +3,14 @@ import { MercadoFinanceiro } from '../store/useAgroStore';
 export const ServicoMercado = {
   sincronizarB3: async (): Promise<MercadoFinanceiro> => {
     try {
-      // 1. Dólar (AwesomeAPI) - Estável
-      const respDolar = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL', { cache: 'no-store' });
-      if (!respDolar.ok) throw new Error("Falha ao buscar Dólar");
-      const dadosDolar = await respDolar.json();
-      const dolarAtual = parseFloat(dadosDolar.USDBRL.bid);
-
-      // 2. A SOLUÇÃO GARANTIDA: O Navegador do usuário faz o pedido via Proxy
-      const tickers = 'ZS=F,ZC=F,ZW=F,CT=F,SB=F';
-      // Usamos a rota QUOTE (Cotações oficiais), que é a mais confiável
-      const urlYahoo = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers}`;
+      // Volta a buscar da nossa API segura na Vercel
+      const response = await fetch('/api/mercado', { cache: 'no-store' });
       
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlYahoo)}`;
-
-      const respYahoo = await fetch(proxyUrl, { cache: 'no-store' });
-      if (!respYahoo.ok) throw new Error("Falha no Proxy do Navegador");
+      if (!response.ok) throw new Error("Servidor financeiro inacessível.");
       
-      const proxyData = await respYahoo.json();
-      if (!proxyData.contents) throw new Error("Dados bloqueados");
+      const data = await response.json();
+      const dolarAtual = data.dolar;
       
-      // O AllOrigins devolve uma string no 'contents', precisamos converter para JSON
-      const dadosYahoo = JSON.parse(proxyData.contents);
-      
-      // A CORREÇÃO CIRÚRGICA: O caminho correto do JSON é quoteResponse.result
-      if (!dadosYahoo.quoteResponse || !dadosYahoo.quoteResponse.result) {
-         console.error("Estrutura recebida do Yahoo:", dadosYahoo);
-         throw new Error("Estrutura do Yahoo inválida");
-      }
-
-      const resultados = dadosYahoo.quoteResponse.result;
-
-      // Extrator de precisão corrigido
-      const getPreco = (simbolo: string) => {
-          const ativo = resultados.find((r: any) => r.symbol === simbolo);
-          return ativo && ativo.regularMarketPrice ? ativo.regularMarketPrice : 0;
-      };
-
-      const data = {
-        sojaUSDBushel: getPreco('ZS=F'),
-        milhoUSDBushel: getPreco('ZC=F'),
-        trigoUSDBushel: getPreco('ZW=F'),
-        algodaoUSDLb: getPreco('CT=F'),
-        acucarUSDLb: getPreco('SB=F')
-      };
-
-      // Trava de segurança: se a bolsa estiver fechada e retornar zero
-      if (data.sojaUSDBushel === 0) throw new Error("Bolsa fechada ou dados zerados");
-
-      // --- MATEMÁTICA OFICIAL (Conversões Globais) ---
       const precoSojaSacaUSD = (data.sojaUSDBushel / 100) * 2.2046; 
       const sojaBRL = dolarAtual * precoSojaSacaUSD;
 
@@ -85,9 +45,9 @@ export const ServicoMercado = {
       };
 
     } catch (error) {
-      console.warn("🚨 [Agro OS] Fallback Ativado:", error);
+      console.error("🚨 [Agro OS] Fallback Ativado:", error);
       
-      // Simulador de Mercado Dinâmico (Plano de Segurança)
+      // Simulador de Mercado Dinâmico 
       const gerarVariacao = () => (Math.random() * 0.04) - 0.02; 
       const baseDolar = 5.10 * (1 + gerarVariacao());
       const baseSojaUSD = 11.90 * (1 + gerarVariacao()); 
