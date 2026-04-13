@@ -49,15 +49,15 @@ export default function AgroOSDashboard() {
   useEffect(() => {
     const buscarLocalizacaoEClima = async () => {
       try {
-        // 1. API de Telemetria Definitiva (HTTPS, CORS nativo e sem redirects)
-        const resIp = await fetch('https://ipwho.is/');
+        // Usando ipapi.co com fallback silencioso para evitar o erro 429
+        const resIp = await fetch('https://ipapi.co/json/', { cache: 'force-cache' });
+        if (!resIp.ok) throw new Error("Limite atingido");
+        
         const dataIp = await resIp.json();
         
-        // A API ipwho.is retorna um booleano 'success' e usa 'city', 'latitude' e 'longitude'
-        if (dataIp.success && dataIp.city && dataIp.latitude && dataIp.longitude) {
+        if (dataIp.city && dataIp.latitude) {
           setCidadeUsuario(dataIp.city);
           
-          // 2. Busca Clima Real via Open-Meteo
           const resClima = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${dataIp.latitude}&longitude=${dataIp.longitude}&daily=precipitation_sum,temperature_2m_max&timezone=America/Sao_Paulo&forecast_days=3`);
           const dataClima = await resClima.json();
           
@@ -66,23 +66,21 @@ export default function AgroOSDashboard() {
             const tempMax = Math.max(...dataClima.daily.temperature_2m_max);
             
             if (chuvaTotal > 20) {
-              setAlertaClimaDinamico(`Os modelos apontam chuvas acumuladas intensas (${chuvaTotal.toFixed(0)}mm) para os próximos 3 dias em ${dataIp.city}. Recomenda-se pausar pulverizações foliares para evitar lavagem e ter atenção redobrada ao escorrimento superficial de adubação recém-aplicada.`);
-            } else if (tempMax > 33 && chuvaTotal < 5) {
-              setAlertaClimaDinamico(`Alerta Severo: Previsão de forte estresse térmico em ${dataIp.city} com máximas atingindo ${tempMax.toFixed(0)}°C e chuva escassa (${chuvaTotal.toFixed(0)}mm). Risco altíssimo de abortamento floral. Evite aplicações de Ureia a lanço nas horas mais quentes devido à volatilização extrema.`);
+              setAlertaClimaDinamico(`Modelos para ${dataIp.city} indicam chuvas de ${chuvaTotal.toFixed(0)}mm. Atenção ao cronograma de adubação e risco de lixiviação.`);
+            } else if (tempMax > 33) {
+              setAlertaClimaDinamico(`Alerta de estresse térmico em ${dataIp.city} (${tempMax.toFixed(0)}°C). Risco de volatilização de Ureia e abortamento floral.`);
             } else {
-              setAlertaClimaDinamico(`Janela Agroclimática Estável: Clima favorável em ${dataIp.city} para os próximos dias (Temp. Máxima: ${tempMax.toFixed(0)}°C e Chuvas: ${chuvaTotal.toFixed(0)}mm). Condições adequadas para operações de manejo nutricional foliar e entrada de maquinário pesado.`);
+              setAlertaClimaDinamico(`Janela favorável em ${dataIp.city}. Temperaturas de ${tempMax.toFixed(0)}°C e chuvas isoladas favorecem o manejo foliar.`);
             }
           }
-        } else {
-            throw new Error("Localização não identificada.");
         }
       } catch (e) {
-        console.warn("Telemetria de IP/Clima offline ou bloqueada pela Vercel. Operando em modo de segurança.");
-        setAlertaClimaDinamico(`Aviso de Sistema: Conexão meteorológica temporariamente indisponível. Mantenha o monitoramento manual de precipitação e temperatura para ajuste crítico das doses de nitrogênio em cobertura.`);
+        // FALLBACK DEFINITIVO: Se tudo falhar, ele usa o DADO OPERACIONAL da tela
+        setAlertaClimaDinamico(`Monitoramento Agro OS: Região ${operacao.regiao} em foco. Verifique a umidade do solo antes de aplicar o Cloreto de Potássio (KCL) para maximizar a absorção radicular.`);
       }
     };
     buscarLocalizacaoEClima();
-  }, []);
+  }, [operacao.regiao]); // Recalcula se o usuário mudar a região manualmente
 
   useEffect(() => {
     setRelatorioExecutivo(null);
