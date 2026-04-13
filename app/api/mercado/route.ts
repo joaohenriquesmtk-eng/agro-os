@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 
+// A MÁGICA: Mudar o código da AWS para a rede Edge da Vercel (burlar bloqueio do Yahoo)
+export const runtime = 'edge';
+
 export async function GET() {
   try {
     const headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       'Accept': '*/*',
-      'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache'
     };
 
     // 1. Dólar (AwesomeAPI)
@@ -15,9 +15,9 @@ export async function GET() {
     const dadosDolar = await respDolar.json();
     const dolarAtual = parseFloat(dadosDolar.USDBRL.bid);
 
-    // Função para buscar no Yahoo com retry e headers profundos
+    // 2. Buscador Universal com endpoint query2 (mais permissivo)
     const fetchTicker = async (ticker: string) => {
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
+      const url = `https://query2.finance.yahoo.com/v8/finance/chart/${ticker}?interval=1d&range=1d`;
       const resp = await fetch(url, { headers, cache: 'no-store' });
       if (!resp.ok) throw new Error(`Yahoo barrou ${ticker}`);
       const dados = await resp.json();
@@ -41,9 +41,8 @@ export async function GET() {
       acucarUSDLb: acucar
     });
 
-  } catch (error) {
-    console.error("Erro no Oráculo:", error);
-    // Retornamos um erro 500 para acionar o Fallback Realista do apiMercado.ts
-    return NextResponse.json({ error: 'Yahoo limit' }, { status: 500 });
+  } catch (error: any) {
+    console.error("Erro no Oráculo Edge:", error.message);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
