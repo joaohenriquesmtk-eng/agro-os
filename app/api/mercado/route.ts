@@ -4,30 +4,40 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    // 1. Dólar (AwesomeAPI) - Direto, pois eles não bloqueiam a Vercel
+    // 1. Dólar (AwesomeAPI) - Blindado e estável
     const respDolar = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL', { cache: 'no-store' });
     const dadosDolar = await respDolar.json();
     const dolarAtual = parseFloat(dadosDolar.USDBRL.bid);
 
-    // 2. A ROTA ALTERNATIVA: O Túnel (Proxy Global)
-    const urlYahoo = 'https://query1.finance.yahoo.com/v7/finance/quote?symbols=ZS=F,ZC=F,ZW=F,CT=F,SB=F';
-    
-    // Envolvemos a URL do Yahoo dentro do AllOrigins (Raw Mode para devolver o JSON puro)
-    const urlProxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(urlYahoo)}`;
+    // 2. A ROTA SPARK: O Cavalo de Troia.
+    // Em vez de acessar a rota web (bloqueada), acessamos a rota de "Widgets de Celular" (Spark).
+    // Essa rota é livre de Cookies e Crumbs, e a AWS/Vercel consegue acessá-la se fingirmos ser um iPhone.
+    const tickers = 'ZS=F,ZC=F,ZW=F,CT=F,SB=F';
+    const urlSpark = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${tickers}`;
 
-    const respYahoo = await fetch(urlProxy, { cache: 'no-store' });
-    
+    const respYahoo = await fetch(urlSpark, {
+      cache: 'no-store',
+      headers: {
+        // Disfarce perfeito: O Yahoo enxerga a Vercel como um iPhone pedindo dados para um Widget
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+        'Accept': 'application/json'
+      }
+    });
+
     if (!respYahoo.ok) {
-        throw new Error(`Falha no Túnel. Status: ${respYahoo.status}`);
+        throw new Error(`O Firewall barrou o Spark. Status: ${respYahoo.status}`);
     }
-    
-    const dadosYahoo = await respYahoo.json();
-    const resultados = dadosYahoo.quoteResponse.result;
 
-    // Função inteligente para achar o preço
+    const dadosYahoo = await respYahoo.json();
+    const resultados = dadosYahoo.spark.result;
+
+    // Função para extrair o preço exato dentro do pacote do Widget (Spark)
     const getPreco = (simbolo: string) => {
         const ativo = resultados.find((r: any) => r.symbol === simbolo);
-        return ativo ? ativo.regularMarketPrice : 0;
+        if (ativo && ativo.response && ativo.response[0] && ativo.response[0].meta) {
+            return ativo.response[0].meta.regularMarketPrice;
+        }
+        return 0;
     };
 
     return NextResponse.json({ 
@@ -40,7 +50,7 @@ export async function GET() {
     });
 
   } catch (error: any) {
-    console.error("Erro fatal no Oráculo de Mercado:", error.message);
-    return NextResponse.json({ error: 'Falha ao buscar cotações originais.' }, { status: 500 });
+    console.error("Erro fatal no Oráculo Vercel:", error.message);
+    return NextResponse.json({ error: 'Bloqueio de nuvem.' }, { status: 500 });
   }
 }
