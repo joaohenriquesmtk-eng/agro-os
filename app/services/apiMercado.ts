@@ -3,18 +3,17 @@ import { MercadoFinanceiro } from '../store/useAgroStore';
 export const ServicoMercado = {
   sincronizarB3: async (): Promise<MercadoFinanceiro> => {
     try {
-      // 1. Dólar (AwesomeAPI) - Permitido nativamente para navegadores (CORS liberado)
+      // 1. Dólar (AwesomeAPI) - Estável
       const respDolar = await fetch('https://economia.awesomeapi.com.br/json/last/USD-BRL', { cache: 'no-store' });
       if (!respDolar.ok) throw new Error("Falha ao buscar Dólar");
       const dadosDolar = await respDolar.json();
       const dolarAtual = parseFloat(dadosDolar.USDBRL.bid);
 
-      // 2. A SOLUÇÃO GARANTIDA: O Navegador do usuário faz o pedido, não a Vercel.
-      // Como o Yahoo bloqueia IPs de servidores da Amazon/Vercel, fazemos o bypass client-side.
+      // 2. A SOLUÇÃO GARANTIDA: O Navegador do usuário faz o pedido via Proxy
       const tickers = 'ZS=F,ZC=F,ZW=F,CT=F,SB=F';
-      const urlYahoo = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${tickers}`;
+      // Usamos a rota QUOTE (Cotações oficiais), que é a mais confiável
+      const urlYahoo = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${tickers}`;
       
-      // Usamos o endpoint 'get' do AllOrigins que empacota os dados para driblar o bloqueio do navegador
       const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlYahoo)}`;
 
       const respYahoo = await fetch(proxyUrl, { cache: 'no-store' });
@@ -23,16 +22,21 @@ export const ServicoMercado = {
       const proxyData = await respYahoo.json();
       if (!proxyData.contents) throw new Error("Dados bloqueados");
       
+      // O AllOrigins devolve uma string no 'contents', precisamos converter para JSON
       const dadosYahoo = JSON.parse(proxyData.contents);
-      const resultados = dadosYahoo.spark.result;
+      
+      // A CORREÇÃO CIRÚRGICA: O caminho correto do JSON é quoteResponse.result
+      if (!dadosYahoo.quoteResponse || !dadosYahoo.quoteResponse.result) {
+         console.error("Estrutura recebida do Yahoo:", dadosYahoo);
+         throw new Error("Estrutura do Yahoo inválida");
+      }
 
-      // Extrator de precisão do pacote Spark
+      const resultados = dadosYahoo.quoteResponse.result;
+
+      // Extrator de precisão corrigido
       const getPreco = (simbolo: string) => {
           const ativo = resultados.find((r: any) => r.symbol === simbolo);
-          if (ativo && ativo.response && ativo.response[0] && ativo.response[0].meta) {
-              return ativo.response[0].meta.regularMarketPrice;
-          }
-          return 0;
+          return ativo && ativo.regularMarketPrice ? ativo.regularMarketPrice : 0;
       };
 
       const data = {
