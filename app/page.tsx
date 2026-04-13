@@ -49,15 +49,16 @@ export default function AgroOSDashboard() {
   useEffect(() => {
     const buscarLocalizacaoEClima = async () => {
       try {
-        // 1. Nova API de Telemetria (Mais Permissiva com CORS na Vercel)
-        const resIp = await fetch('http://ip-api.com/json/');
+        // 1. Nova API de Telemetria (HTTPS, gratuita e 100% compatível com Vercel)
+        const resIp = await fetch('https://freeipapi.com/api/json');
         const dataIp = await resIp.json();
         
-        if (dataIp.city && dataIp.lat && dataIp.lon) {
-          setCidadeUsuario(dataIp.city);
+        // A API nova usa 'cityName', 'latitude' e 'longitude'
+        if (dataIp.cityName && dataIp.latitude && dataIp.longitude) {
+          setCidadeUsuario(dataIp.cityName);
           
           // 2. Busca Clima Real via Open-Meteo
-          const resClima = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${dataIp.lat}&longitude=${dataIp.lon}&daily=precipitation_sum,temperature_2m_max&timezone=America/Sao_Paulo&forecast_days=3`);
+          const resClima = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${dataIp.latitude}&longitude=${dataIp.longitude}&daily=precipitation_sum,temperature_2m_max&timezone=America/Sao_Paulo&forecast_days=3`);
           const dataClima = await resClima.json();
           
           if (dataClima.daily) {
@@ -65,11 +66,11 @@ export default function AgroOSDashboard() {
             const tempMax = Math.max(...dataClima.daily.temperature_2m_max);
             
             if (chuvaTotal > 20) {
-              setAlertaClimaDinamico(`Os modelos apontam chuvas acumuladas intensas (${chuvaTotal.toFixed(0)}mm) para os próximos 3 dias em ${dataIp.city}. Recomenda-se pausar pulverizações foliares para evitar lavagem e ter atenção redobrada ao escorrimento superficial de adubação recém-aplicada.`);
+              setAlertaClimaDinamico(`Os modelos apontam chuvas acumuladas intensas (${chuvaTotal.toFixed(0)}mm) para os próximos 3 dias em ${dataIp.cityName}. Recomenda-se pausar pulverizações foliares para evitar lavagem e ter atenção redobrada ao escorrimento superficial de adubação recém-aplicada.`);
             } else if (tempMax > 33 && chuvaTotal < 5) {
-              setAlertaClimaDinamico(`Alerta Severo: Previsão de forte estresse térmico em ${dataIp.city} com máximas atingindo ${tempMax.toFixed(0)}°C e chuva escassa (${chuvaTotal}mm). Risco altíssimo de abortamento floral. Evite aplicações de Ureia a lanço nas horas mais quentes devido à volatilização extrema.`);
+              setAlertaClimaDinamico(`Alerta Severo: Previsão de forte estresse térmico em ${dataIp.cityName} com máximas atingindo ${tempMax.toFixed(0)}°C e chuva escassa (${chuvaTotal.toFixed(0)}mm). Risco altíssimo de abortamento floral. Evite aplicações de Ureia a lanço nas horas mais quentes devido à volatilização extrema.`);
             } else {
-              setAlertaClimaDinamico(`Janela Agroclimática Estável: Clima favorável em ${dataIp.city} para os próximos dias (Temp. Máxima: ${tempMax.toFixed(0)}°C e Chuvas: ${chuvaTotal.toFixed(0)}mm). Condições adequadas para operações de manejo nutricional foliar e entrada de maquinário pesado.`);
+              setAlertaClimaDinamico(`Janela Agroclimática Estável: Clima favorável em ${dataIp.cityName} para os próximos dias (Temp. Máxima: ${tempMax.toFixed(0)}°C e Chuvas: ${chuvaTotal.toFixed(0)}mm). Condições adequadas para operações de manejo nutricional foliar e entrada de maquinário pesado.`);
             }
           }
         } else {
@@ -77,7 +78,6 @@ export default function AgroOSDashboard() {
         }
       } catch (e) {
         console.warn("Telemetria de IP/Clima offline ou bloqueada pela Vercel. Operando em modo de segurança.");
-        // Mensagem de segurança realista e genérica
         setAlertaClimaDinamico(`Aviso de Sistema: Conexão meteorológica temporariamente indisponível. Mantenha o monitoramento manual de precipitação e temperatura para ajuste crítico das doses de nitrogênio em cobertura.`);
       }
     };
