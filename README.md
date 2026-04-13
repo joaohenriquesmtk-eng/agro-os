@@ -3,7 +3,7 @@
 ![Agro OS Banner](https://img.shields.io/badge/Status-Em_Produ%C3%A7%C3%A3o-10b981?style=for-the-badge)
 ![Next.js](https://img.shields.io/badge/Next.js-14-black?style=for-the-badge&logo=next.js)
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
-![Gemini AI](https://img.shields.io/badge/Gemini_1.5_Flash-8E75B2?style=for-the-badge&logo=google&logoColor=white)
+![Gemini AI](https://img.shields.io/badge/Gemini_3.0_Flash-8E75B2?style=for-the-badge&logo=google&logoColor=white)
 ![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=for-the-badge&logo=firebase&logoColor=black)
 
 O **Agro OS** é um ecossistema definitivo de inteligência agronômica e financeira. Nascido da fusão de projetos anteriores focados em diagnóstico visual e modelagem econômica, este sistema atua como o "cérebro" da operação agrícola, cruzando dados pedoclimáticos, análises de imagem por Inteligência Artificial e telemetria financeira em tempo real (B3/CBOT).
@@ -23,7 +23,7 @@ O ecossistema é dividido em três motores fundamentais que operam em sincronia:
 - **Satélite Open-Meteo:** Rastreamento dinâmico do IP do usuário via *Edge Computing* para fornecer dados agrometeorológicos dos próximos 3 dias, emitindo alertas dinâmicos sobre risco de lavagem foliar ou volatilização de fertilizantes.
 
 ### 3. Auditoria Multimodal (Gemini AI)
-- **Análise Visual de Anomalias:** Suporte para upload de mapas de índice vegetativo (NDVI/NDRE). O sistema processa a imagem via Google Gemini 1.5 Flash.
+- **Análise Visual de Anomalias:** Suporte para upload de mapas de índice vegetativo (NDVI/NDRE). O sistema processa a imagem via Google Gemini 3.0 Flash.
 - **Laudo Técnico:** Geração de um parecer executivo agronômico cruzando a imagem do talhão com o ROI projetado, gerando um laudo documentado e histórico.
 
 ## 🛠️ Stack Tecnológica
