@@ -1,0 +1,135 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function membershipDoc(orgId) {
+      return get(/databases/$(database)/documents/memberships/$(orgId + '_' + request.auth.uid));
+    }
+
+    function hasMembership(orgId) {
+      return signedIn()
+        && membershipDoc(orgId).data.organizationId == orgId
+        && membershipDoc(orgId).data.status == 'active';
+    }
+
+    function hasOrgRole(orgId, roles) {
+      return hasMembership(orgId) && membershipDoc(orgId).data.role in roles;
+    }
+
+    function inviteExistsForSelf(orgId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/invitations/$(orgId + '__' + request.auth.token.email))
+        && get(/databases/$(database)/documents/invitations/$(orgId + '__' + request.auth.token.email)).data.status == 'pending';
+    }
+
+    function isOwnMembershipDoc(membershipId) {
+      return signedIn() && membershipId.matches('.*_' + request.auth.uid);
+    }
+
+    function isOwnInvitationDoc(invitationId) {
+      return signedIn() && invitationId.matches('.*__' + request.auth.token.email);
+    }
+
+    function inviteRoleMatches(orgId, role) {
+      return inviteExistsForSelf(orgId)
+        && get(/databases/$(database)/documents/invitations/$(orgId + '__' + request.auth.token.email)).data.role == role;
+    }
+
+    function bootstrapOwner(orgId) {
+      return signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.role == 'OWNER'
+        && !exists(/databases/$(database)/documents/organizations/$(orgId));
+    }
+
+    match /organizations/{organizationId} {
+      allow read: if hasMembership(organizationId);
+      allow create, update, delete: if hasOrgRole(organizationId, ['OWNER', 'ADMIN']);
+    }
+
+    match /farms/{farmId} {
+      allow read: if hasMembership(resource.data.organizationId);
+      allow create: if hasOrgRole(request.resource.data.organizationId, ['OWNER', 'ADMIN']);
+      allow update, delete: if hasOrgRole(resource.data.organizationId, ['OWNER', 'ADMIN']);
+    }
+
+    match /fields/{fieldId} {
+      allow read: if hasMembership(resource.data.organizationId);
+      allow create: if hasOrgRole(request.resource.data.organizationId, ['OWNER', 'ADMIN']);
+      allow update, delete: if hasOrgRole(resource.data.organizationId, ['OWNER', 'ADMIN']);
+    }
+
+    match /seasons/{seasonId} {
+      allow read: if hasMembership(resource.data.organizationId);
+      allow create: if hasOrgRole(request.resource.data.organizationId, ['OWNER', 'ADMIN']);
+      allow update, delete: if hasOrgRole(resource.data.organizationId, ['OWNER', 'ADMIN']);
+    }
+
+    match /reports/{reportId} {
+      allow read: if hasMembership(resource.data.organizationId);
+      allow create: if hasOrgRole(request.resource.data.organizationId, ['OWNER', 'ADMIN', 'AGRONOMIST', 'OPERATOR'])
+        && request.resource.data.createdByUserId == request.auth.uid;
+      allow update: if hasOrgRole(resource.data.organizationId, ['OWNER', 'ADMIN', 'AGRONOMIST']);
+      allow delete: if hasOrgRole(resource.data.organizationId, ['OWNER', 'ADMIN']);
+    }
+
+    match /memberships/{membershipId} {
+      allow read: if signedIn() && (
+        isOwnMembershipDoc(membershipId)
+        || (resource != null && hasOrgRole(resource.data.organizationId, ['OWNER', 'ADMIN']))
+      );
+
+      allow create: if signedIn() && (
+        hasOrgRole(request.resource.data.organizationId, ['OWNER', 'ADMIN'])
+        || (
+          request.resource.data.userId == request.auth.uid
+          && request.resource.data.email == request.auth.token.email
+          && inviteRoleMatches(request.resource.data.organizationId, request.resource.data.role)
+        )
+        || bootstrapOwner(request.resource.data.organizationId)
+      );
+
+      allow update: if signedIn() && (
+        hasOrgRole(resource.data.organizationId, ['OWNER', 'ADMIN'])
+        || (
+          resource.data.userId == request.auth.uid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.organizationId == resource.data.organizationId
+          && request.resource.data.userId == resource.data.userId
+        )
+      );
+
+      allow delete: if hasOrgRole(resource.data.organizationId, ['OWNER', 'ADMIN']);
+    }
+
+    match /invitations/{invitationId} {
+      allow read: if signedIn() && (
+        isOwnInvitationDoc(invitationId)
+        || (resource != null && hasOrgRole(resource.data.organizationId, ['OWNER', 'ADMIN']))
+      );
+
+      allow create: if hasOrgRole(request.resource.data.organizationId, ['OWNER', 'ADMIN']);
+      allow update, delete: if hasOrgRole(resource.data.organizationId, ['OWNER', 'ADMIN']);
+    }
+
+    match /parametros_mercado/{docId} {
+      allow read, write: if false;
+    }
+
+    match /parametros_motor/{docId} {
+      allow read, write: if false;
+    }
+
+    match /historico_talhoes/{docId} {
+      allow read, write: if false;
+    }
+
+    match /system_cache/{docId} {
+      allow read, write: if false;
+    }
+  }
+}
