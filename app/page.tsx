@@ -298,7 +298,29 @@ export default function AgroOSDashboard() {
     }
   };
 
-  const parametrosCulturaUI = GeoEngine.getParametrosCultura(operacao.cultura, operacao.regiao);
+  const cultureProfile = GeoEngine.getParametrosCultura(operacao.cultura, operacao.regiao);
+
+const unidadePorCultura: Record<CulturaBrasil, string> = {
+  SOJA: "sc/ha",
+  MILHO: "sc/ha",
+  TRIGO: "sc/ha",
+  ALGODAO: "@/ha",
+  CANA: "TCH",
+};
+
+const fatorExtracaoPMap: Record<CulturaBrasil, number> = {
+  SOJA: 1,
+  MILHO: 0.75,
+  TRIGO: 0.78,
+  ALGODAO: 0.9,
+  CANA: 0.55,
+};
+
+const parametrosCulturaUI = {
+  unidade: unidadePorCultura[operacao.cultura],
+  produtividadeBase: cultureProfile.produtividadeBase,
+  fatorExtracaoP: fatorExtracaoPMap[operacao.cultura],
+};
   const precoCulturaAtual = mercado.cotacoes?.[operacao.cultura] || 0;
   const unidadeMercadoAtual = getMarketUnit(operacao.cultura);
   const labelMercadoAtual = getMarketLabel(operacao.cultura, mercado.statusMercado);
