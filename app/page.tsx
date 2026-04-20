@@ -318,7 +318,7 @@ const fatorExtracaoPMap: Record<CulturaBrasil, number> = {
 
 const parametrosCulturaUI = {
   unidade: unidadePorCultura[operacao.cultura],
-  produtividadeBase: cultureProfile.produtividadeBase,
+  produtividadeBase: cultureProfile.productivityBase,
   fatorExtracaoP: fatorExtracaoPMap[operacao.cultura],
 };
   const precoCulturaAtual = mercado.cotacoes?.[operacao.cultura] || 0;
