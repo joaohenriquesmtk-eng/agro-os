@@ -11,12 +11,18 @@ export interface DadosOperacionais {
   produtividadeAlvo: number;
   fosforoMehlich: number;
   potassio: number;
+  phSolo: number;
+  ctc: number;
+  materiaOrganica: number;
+  saturacaoBases: number;
+  teorArgila: number;
 }
 
 export interface AnaliseEspectral {
   areaEstresseHa: number;
   faseFenologica: string;
   indice: string;
+  chuva7dMm: number;
 }
 
 export interface MercadoFinanceiro {
@@ -50,12 +56,18 @@ const operacaoInicial: DadosOperacionais = {
   produtividadeAlvo: 75,
   fosforoMehlich: 12,
   potassio: 0.15,
+  phSolo: 5.5,
+  ctc: 8,
+  materiaOrganica: 2,
+  saturacaoBases: 50,
+  teorArgila: 45,
 };
 
 const analiseInicial: AnaliseEspectral = {
   areaEstresseHa: 0,
   faseFenologica: "Emergência (VE-VC)",
   indice: "NDVI (Padrão)",
+  chuva7dMm: 10,
 };
 
 const mercadoInicial: MercadoFinanceiro = {
