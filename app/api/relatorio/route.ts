@@ -2,41 +2,76 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { buildLocalTechnicalReport } from "../../domain/agro/localReportBuilder";
+import { getProvidersHealth } from "../../lib/providerHealth";
+import { getTechnicalReportProviderConfig } from "../../lib/ai/providers";
+import { orchestrateRefinedTechnicalReport } from "../../lib/ai/providerOrchestrator";
+import { persistTechnicalRouteTelemetry } from "../../lib/ai/routeTelemetry";
 
-type StatusSistema = "AUTORIZADO" | "RISCO_ELEVADO" | "BLOQUEADO";
+type ReportMode = "LOCAL" | "IA_REFINADA";
 
-function toLine(value: unknown, fallback = "N/D") {
-  if (value === null || value === undefined) return fallback;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) return fallback;
-    return String(value);
-  }
-  const text = String(value).trim();
-  return text || fallback;
+function buildLocalResponse(input: {
+  operacao: any;
+  analise: any;
+  mercado: any;
+  veredito: any;
+  origem: string;
+  fallback: boolean;
+  warning?: string | null;
+  attemptedProviders?: any[];
+  routeTelemetry?: any | null;
+  telemetryPersisted?: boolean;
+  providersHealth?: any;
+  providersConfig?: any;
+}) {
+  const {
+    operacao,
+    analise,
+    mercado,
+    veredito,
+    origem,
+    fallback,
+    warning = null,
+    attemptedProviders = [],
+    routeTelemetry = null,
+    telemetryPersisted = false,
+    providersHealth = null,
+    providersConfig = getTechnicalReportProviderConfig(),
+  } = input;
+
+  const relatorio = buildLocalTechnicalReport({
+    operacao,
+    analise,
+    mercado,
+    veredito,
+    origem,
+  });
+
+  return NextResponse.json({
+    relatorio,
+    mode: "LOCAL",
+    fallback,
+    warning,
+    providerUsed: null,
+    attemptedProviders,
+    routeTelemetry,
+    telemetryPersisted,
+    providersHealth,
+    providersConfig,
+  });
 }
 
-function toCurrency(value: unknown) {
-  const num = Number(value);
-  if (!Number.isFinite(num)) return "N/D";
-  return `R$ ${num.toFixed(2)}`;
-}
-
-function getParecerOperacionalFinal(status: StatusSistema): string {
-  switch (status) {
-    case "AUTORIZADO":
-      return "AUTORIZADO";
-    case "RISCO_ELEVADO":
-      return "RISCO ELEVADO";
-    case "BLOQUEADO":
-    default:
-      return "BLOQUEADO";
-  }
+export async function GET() {
+  return NextResponse.json({
+    providersHealth: await getProvidersHealth(["GEMINI", "OPENROUTER", "OPENAI"]),
+    providersConfig: getTechnicalReportProviderConfig(),
+  });
 }
 
 export async function POST(req: Request) {
+  let dados: any = null;
+
   try {
-    const apiKey = process.env.GEMINI_API_KEY?.trim();
-    const dados = await req.json();
+    dados = await req.json();
 
     const {
       operacao,
@@ -45,191 +80,103 @@ export async function POST(req: Request) {
       veredito,
       imagemBase64,
       reportMode = "IA_REFINADA",
-    } = dados;
+    } = dados as {
+      operacao: any;
+      analise: any;
+      mercado: any;
+      veredito: any;
+      imagemBase64?: string | null;
+      reportMode?: ReportMode;
+    };
 
     if (reportMode === "LOCAL") {
-      const relatorio = buildLocalTechnicalReport({
+      return buildLocalResponse({
         operacao,
         analise,
         mercado,
         veredito,
         origem: "MOTOR LOCAL",
-      });
-
-      return NextResponse.json({
-        relatorio,
-        mode: "LOCAL",
         fallback: false,
       });
     }
 
-    if (!apiKey) {
-      const relatorio = buildLocalTechnicalReport({
-        operacao,
-        analise,
-        mercado,
-        veredito,
-        origem: "MOTOR LOCAL (SEM CHAVE EXTERNA)",
-      });
-
-      return NextResponse.json({
-        relatorio,
-        mode: "LOCAL",
-        fallback: true,
-        warning:
-          "Chave da IA externa não encontrada. O Agro OS gerou o laudo em modo local.",
-      });
-    }
-
-    const dataAtual = new Intl.DateTimeFormat("pt-BR", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    }).format(new Date());
-
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
-    const instrucaoVisual = imagemBase64
-      ? `Analise a imagem anexa apenas como apoio complementar. Não invente diagnóstico visual específico sem base consistente.`
-      : `O usuário não forneceu mapa visual. Baseie-se apenas nos dados numéricos, econômicos e sazonais.`;
-
-    const promptMaster = `
-Você é o redator técnico do Agro OS.
-Refine a redação de um laudo técnico executivo já fundamentado pelo motor interno.
-
-REGRAS:
-- Use bullets com "•"
-- Use negrito com **texto**
-- Não altere o status final do sistema
-- Não invente causalidade forte
-- Não floreie
-- Não contradiga os dados do motor
-- Escreva como parecer técnico sóbrio
-
-DADOS:
-- Data: ${dataAtual}
-- Cultura: ${toLine(operacao.cultura)}
-- Fase: ${toLine(analise.faseFenologica)}
-- Região: ${toLine(operacao.regiao)}
-- Área: ${toLine(analise.areaEstresseHa)} ha
-- P: ${toLine(operacao.fosforoMehlich)} mg/dm³
-- K: ${toLine(operacao.potassio)} cmolc/dm³
-- Produtividade alvo: ${toLine(operacao.produtividadeAlvo)}
-- Dólar: ${toCurrency(mercado.dolarPtax)}
-- MAP: ${toCurrency(mercado.custoMapTon)}/t
-- KCL: ${toCurrency(mercado.custoKclTon)}/t
-- UREIA: ${toCurrency(mercado.custoUreaTon)}/t
-- Status do sistema: ${toLine(veredito?.status)}
-- Justificativa: ${toLine(veredito?.justificativa)}
-- Fator limitante: ${toLine(veredito?.fatorLimitante)}
-- Sistema produtivo: ${toLine(veredito?.analiseSazonal?.sistemaProdutivo)}
-- Plausibilidade sazonal: ${toLine(veredito?.analiseSazonal?.plausibilidade)}
-- Janela padrão: ${toLine(veredito?.analiseSazonal?.janelaEsperada)}
-- Observação sazonal: ${toLine(veredito?.analiseSazonal?.observacao)}
-- Classificação financeira: ${toLine(veredito?.classificacaoFinanceira)}
-- Custo total: ${toCurrency(veredito?.leituraEconomica?.custoTotalAdubacao)}
-- Retorno estimado: ${toCurrency(veredito?.leituraEconomica?.retornoFinanceiroEstimado)}
-- ROI incremental: ${
-      veredito?.leituraEconomica?.modoAnalise === "NAO_INTERVENCAO_RECOMENDADA"
-        ? "N/A"
-        : toCurrency(veredito?.leituraEconomica?.roiIncrementalAplicacao)
-    }
-
-INSTRUÇÃO VISUAL:
-${instrucaoVisual}
-
-FORMATO:
-- Inicie com "LAUDO TÉCNICO EXECUTIVO - ${dataAtual}"
-- Depois faça:
-  **1. Fatos observados**
-  **2. Interpretação técnica**
-  **3. Leitura econômica**
-  **4. Conclusão técnica**
-- Finalize com:
-  PARECER OPERACIONAL:
-  **${getParecerOperacionalFinal((veredito?.status || "BLOQUEADO") as StatusSistema)}**
-`;
-
-    const parts: any[] = [{ text: promptMaster }];
-
-    if (imagemBase64) {
-      parts.push({
-        inlineData: {
-          mimeType: "image/jpeg",
-          data: imagemBase64,
-        },
-      });
-    }
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts }],
-      }),
+    const orchestration = await orchestrateRefinedTechnicalReport({
+      operacao,
+      analise,
+      mercado,
+      veredito,
+      imagemBase64: imagemBase64 || null,
     });
 
-    const result = await response.json();
+    const telemetryPersisted = await persistTechnicalRouteTelemetry({
+      routeTelemetry: orchestration.routeTelemetry,
+      requestedMode: "IA_REFINADA",
+      finalMode: orchestration.ok ? "IA_REFINADA" : "LOCAL",
+      warning: orchestration.warning || null,
+      providersConfig: orchestration.providersConfig,
+      providersHealth: orchestration.providersHealth as Record<string, unknown>,
+      operacao,
+      analise,
+      veredito,
+      possuiMapa: !!imagemBase64,
+    });
 
-    if (!response.ok) {
-      console.error("Falha Gemini:", result);
-
-      const relatorioFallback = buildLocalTechnicalReport({
-        operacao,
-        analise,
-        mercado,
-        veredito,
-        origem: "FALLBACK LOCAL APÓS FALHA EXTERNA",
-      });
-
+    if (orchestration.ok) {
       return NextResponse.json({
-        relatorio: relatorioFallback,
-        mode: "LOCAL",
-        fallback: true,
-        warning:
-          response.status === 429
-            ? "Cota temporariamente excedida na IA externa. O Agro OS gerou um laudo local de contingência."
-            : "A IA externa falhou. O Agro OS gerou um laudo local de contingência.",
+        relatorio: orchestration.relatorio,
+        mode: "IA_REFINADA",
+        fallback: false,
+        warning: orchestration.warning,
+        providerUsed: orchestration.providerUsed,
+        attemptedProviders: orchestration.attemptedProviders,
+        routeTelemetry: orchestration.routeTelemetry,
+        telemetryPersisted,
+        providersHealth: orchestration.providersHealth,
+        providersConfig: orchestration.providersConfig,
       });
     }
 
-    const textoRelatorio =
-      result?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      buildLocalTechnicalReport({
-        operacao,
-        analise,
-        mercado,
-        veredito,
-        origem: "FALLBACK LOCAL POR RESPOSTA VAZIA",
-      });
+    const relatorioLocal = buildLocalTechnicalReport({
+      operacao,
+      analise,
+      mercado,
+      veredito,
+      origem: "FALLBACK LOCAL APÓS ESGOTAR ROTA EXTERNA",
+    });
 
     return NextResponse.json({
-      relatorio: textoRelatorio,
-      mode: "IA_REFINADA",
-      fallback: false,
+      relatorio: relatorioLocal,
+      mode: "LOCAL",
+      fallback: true,
+      warning: orchestration.warning,
+      providerUsed: null,
+      attemptedProviders: orchestration.attemptedProviders,
+      routeTelemetry: orchestration.routeTelemetry,
+      telemetryPersisted,
+      providersHealth: orchestration.providersHealth,
+      providersConfig: orchestration.providersConfig,
     });
   } catch (error: any) {
     console.error("Erro interno no servidor Agro OS:", error);
 
-    try {
-      const dados = await req.clone().json();
-      const relatorio = buildLocalTechnicalReport({
+    if (dados?.operacao && dados?.analise && dados?.mercado && dados?.veredito) {
+      return buildLocalResponse({
         operacao: dados.operacao,
         analise: dados.analise,
         mercado: dados.mercado,
         veredito: dados.veredito,
         origem: "FALLBACK LOCAL POR EXCEÇÃO INTERNA",
-      });
-
-      return NextResponse.json({
-        relatorio,
-        mode: "LOCAL",
         fallback: true,
         warning:
-          "O Agro OS encontrou uma falha interna na rota externa e retornou para o modo local.",
+          "O Agro OS encontrou uma falha interna na rota de IA refinada e retornou para o modo local.",
       });
-    } catch {
-      return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    return NextResponse.json(
+      {
+        error: error?.message || "Falha interna ao processar a solicitação.",
+      },
+      { status: 500 }
+    );
   }
 }

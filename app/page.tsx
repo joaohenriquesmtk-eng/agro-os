@@ -39,6 +39,58 @@ const fasesFenologicas: Record<CulturaBrasil, string[]> = {
   "TRIGO": ["Germinação", "Perfilhamento", "Elongação", "Espigamento", "Maturação"]
 };
 
+type ProviderName = "GEMINI" | "OPENROUTER" | "OPENAI";
+type ProviderHealthStatus = "ONLINE" | "RATE_LIMITED" | "DEGRADED" | "OFFLINE";
+
+type ProviderHealthSnapshot = {
+  provider: ProviderName;
+  status: ProviderHealthStatus;
+  cooldownUntil: string | null;
+  consecutiveFailures: number;
+  lastFailureAt: string | null;
+  lastSuccessAt: string | null;
+  lastHttpStatus: number | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+  updatedAt: string;
+};
+
+type ProvidersHealthMap = Partial<Record<ProviderName, ProviderHealthSnapshot>>;
+type ProvidersConfigMap = Record<ProviderName, boolean>;
+
+type ProviderAttemptLog = {
+  provider: ProviderName;
+  outcome: "SUCCESS" | "FAILED" | "SKIPPED_UNCONFIGURED" | "SKIPPED_COOLDOWN";
+  modelConfigured: string | null;
+  modelUsed: string | null;
+  durationMs: number;
+  startedAt: string;
+  finishedAt: string;
+  httpStatus: number | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+};
+
+type RouteTelemetrySummary = {
+  routeId: string;
+  startedAt: string;
+  finishedAt: string;
+  totalDurationMs: number;
+  providerUsed: ProviderName | null;
+  fallback: boolean;
+  attemptedProviders: ProviderAttemptLog[];
+};
+
+type ReportRuntimeState = {
+  mode: "LOCAL" | "IA_REFINADA";
+  fallback: boolean;
+  warning: string | null;
+  providerUsed: ProviderName | null;
+  attemptedProviders: ProviderAttemptLog[];
+  routeTelemetry: RouteTelemetrySummary | null;
+  telemetryPersisted: boolean;
+};
+
 export default function AgroOSDashboard() {
   const { 
     operacao, analise, mercado, 
@@ -49,6 +101,14 @@ export default function AgroOSDashboard() {
   const [gerandoIA, setGerandoIA] = useState(false);
   const [relatorioExecutivo, setRelatorioExecutivo] = useState<string | null>(null);
   const [reportMode, setReportMode] = useState<"LOCAL" | "IA_REFINADA">("LOCAL");
+  const [reportRuntime, setReportRuntime] = useState<ReportRuntimeState | null>(null);
+  const [providersHealth, setProvidersHealth] = useState<ProvidersHealthMap | null>(null);
+  const [providersConfig, setProvidersConfig] = useState<ProvidersConfigMap>({
+    GEMINI: false,
+    OPENROUTER: false,
+    OPENAI: false,
+  });
+  const [providerHealthLoading, setProviderHealthLoading] = useState(false);
   
   const [imagemMapa, setImagemMapa] = useState<string | null>(null);
   const [nomeArquivo, setNomeArquivo] = useState<string | null>(null);
@@ -96,24 +156,273 @@ export default function AgroOSDashboard() {
     }
   };
 
+      const handleAtualizarSaudeProvider = async () => {
+    setProviderHealthLoading(true);
+
+    try {
+      const response = await fetch("/api/relatorio", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data?.providersHealth) {
+          setProvidersHealth(data.providersHealth);
+        }
+
+        if (data?.providersConfig) {
+          setProvidersConfig(data.providersConfig);
+        }
+      }
+    } catch (error) {
+      console.error("Falha ao atualizar saúde dos provedores:", error);
+    } finally {
+      setProviderHealthLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void handleAtualizarSaudeProvider();
+  }, []);
+
+  useEffect(() => {
+    if (reportMode === "IA_REFINADA") {
+      void handleAtualizarSaudeProvider();
+    }
+  }, [reportMode]);
+
   const handleGerarRelatorioIA = async () => {
-  if (!veredito || gerandoIA) return;
+    if (!veredito || gerandoIA) return;
 
-  setGerandoIA(true);
+    setGerandoIA(true);
 
-  try {
-    const { signature, fingerprint } = await buildScenarioSignature({
-      operacao,
-      analise,
-      mercado,
-      veredito,
-    });
+    try {
+      const { signature, fingerprint } = await buildScenarioSignature({
+        operacao,
+        analise,
+        mercado,
+        veredito,
+      });
 
-    const cacheKey = `${signature}_${reportMode}`;
-    const cached = await readCachedReport(cacheKey);
+      const cacheKey = `${signature}_${reportMode}`;
+      const cached = await readCachedReport(cacheKey);
 
-    if (cached?.relatorio) {
-      setRelatorioExecutivo(cached.relatorio);
+      const cachedIsUsable =
+        reportMode === "LOCAL"
+          ? !!cached?.relatorio
+          : cached?.source === "IA_EXTERNA";
+
+      if (cachedIsUsable && cached?.relatorio) {
+        const routeTelemetry =
+          (cached.metadata?.routeTelemetry as RouteTelemetrySummary | undefined) ?? null;
+
+        const providerUsed =
+          (cached.metadata?.providerUsed as ProviderName | undefined) ??
+          routeTelemetry?.providerUsed ??
+          null;
+
+        const attemptedProviders =
+          (cached.metadata?.attemptedProviders as ProviderAttemptLog[] | undefined) ??
+          routeTelemetry?.attemptedProviders ??
+          [];
+
+        const telemetryPersisted = !!cached.metadata?.telemetryPersisted;
+
+        setRelatorioExecutivo(cached.relatorio);
+        setReportRuntime({
+          mode: reportMode === "LOCAL" ? "LOCAL" : "IA_REFINADA",
+          fallback: false,
+          warning: null,
+          providerUsed,
+          attemptedProviders,
+          routeTelemetry,
+          telemetryPersisted,
+        });
+
+        try {
+          await addDoc(collection(db, "historico_talhoes"), {
+            talhao: operacao.talhao || "Talhão Não Identificado",
+            cultura: operacao.cultura,
+            regiao: operacao.regiao,
+            faseFenologica: analise.faseFenologica,
+            fosforo: operacao.fosforoMehlich,
+            areaAfetada: analise.areaEstresseHa,
+            roiProjetado: veredito.roiEstimado,
+            vereditoSistema: veredito.status,
+            parecerIA: cached.relatorio,
+            modo: "CACHE",
+            modoRelatorio: reportMode,
+            providerUsed,
+            attemptedProviders,
+            routeId: routeTelemetry?.routeId || null,
+            totalDurationMs: routeTelemetry?.totalDurationMs || null,
+            telemetryPersisted,
+            assinaturaCenario: cacheKey,
+            sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
+            dataRegistro: serverTimestamp(),
+          });
+        } catch (dbError) {
+          console.error("Erro ao gravar histórico do cache:", dbError);
+        }
+
+        alert(`Laudo recuperado do cache técnico do Agro OS (${reportMode}).`);
+        return;
+      }
+
+      if (reportMode === "LOCAL") {
+        const relatorioLocal = buildLocalTechnicalReport({
+          operacao,
+          analise,
+          mercado,
+          veredito,
+          origem: "MOTOR LOCAL (ACIONAMENTO DIRETO)",
+        });
+
+        setRelatorioExecutivo(relatorioLocal);
+        setReportRuntime({
+          mode: "LOCAL",
+          fallback: false,
+          warning: null,
+          providerUsed: null,
+          attemptedProviders: [],
+          routeTelemetry: null,
+          telemetryPersisted: false,
+        });
+
+        try {
+          await writeCachedReport({
+            signature: cacheKey,
+            relatorio: relatorioLocal,
+            source: "LOCAL_FALLBACK",
+            fingerprint,
+            metadata: {
+              cultura: operacao.cultura,
+              regiao: operacao.regiao,
+              faseFenologica: analise.faseFenologica,
+              statusVeredito: veredito.status,
+              sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
+              modoRelatorio: reportMode,
+              possuiMapa: !!imagemMapa,
+              fallback: false,
+              modeReturned: "LOCAL",
+              providerUsed: null,
+              attemptedProviders: [],
+              routeTelemetry: null,
+              telemetryPersisted: false,
+            },
+          });
+        } catch (cacheError) {
+          console.error("Erro ao gravar cache local:", cacheError);
+        }
+
+        try {
+          await addDoc(collection(db, "historico_talhoes"), {
+            talhao: operacao.talhao || "Talhão Não Identificado",
+            cultura: operacao.cultura,
+            regiao: operacao.regiao,
+            faseFenologica: analise.faseFenologica,
+            fosforo: operacao.fosforoMehlich,
+            areaAfetada: analise.areaEstresseHa,
+            roiProjetado: veredito.roiEstimado,
+            vereditoSistema: veredito.status,
+            parecerIA: relatorioLocal,
+            modo: "LOCAL_DIRETO",
+            modoRelatorio: reportMode,
+            providerUsed: null,
+            attemptedProviders: [],
+            routeId: null,
+            totalDurationMs: null,
+            telemetryPersisted: false,
+            assinaturaCenario: cacheKey,
+            sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
+            dataRegistro: serverTimestamp(),
+          });
+        } catch (dbError) {
+          console.error("Erro ao gravar histórico local:", dbError);
+        }
+
+        return;
+      }
+
+      const response = await fetch("/api/relatorio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operacao,
+          analise,
+          mercado,
+          veredito,
+          imagemBase64: imagemMapa || null,
+          possuiMapa: !!imagemMapa,
+          reportMode,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data?.providersHealth) {
+        setProvidersHealth(data.providersHealth);
+      }
+
+      if (data?.providersConfig) {
+        setProvidersConfig(data.providersConfig);
+      }
+
+      if (!response.ok) {
+        alert(data.error || "Erro desconhecido na API.");
+        return;
+      }
+
+      if (!data.relatorio) {
+        alert(data.error || "Erro desconhecido na API.");
+        return;
+      }
+
+      const attemptedProviders: ProviderAttemptLog[] = data.attemptedProviders || [];
+      const providerUsed: ProviderName | null = data.providerUsed || null;
+      const routeTelemetry: RouteTelemetrySummary | null = data.routeTelemetry || null;
+      const telemetryPersisted = !!data.telemetryPersisted;
+
+      setRelatorioExecutivo(data.relatorio);
+      setReportRuntime({
+        mode: data.mode === "IA_REFINADA" ? "IA_REFINADA" : "LOCAL",
+        fallback: !!data.fallback,
+        warning: data.warning || null,
+        providerUsed,
+        attemptedProviders,
+        routeTelemetry,
+        telemetryPersisted,
+      });
+
+      if (!data.fallback) {
+        try {
+          await writeCachedReport({
+            signature: cacheKey,
+            relatorio: data.relatorio,
+            source: "IA_EXTERNA",
+            fingerprint,
+            metadata: {
+              cultura: operacao.cultura,
+              regiao: operacao.regiao,
+              faseFenologica: analise.faseFenologica,
+              statusVeredito: veredito.status,
+              sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
+              modoRelatorio: reportMode,
+              possuiMapa: !!imagemMapa,
+              fallback: false,
+              modeReturned: data.mode || "IA_REFINADA",
+              providerUsed,
+              attemptedProviders,
+              routeTelemetry,
+              telemetryPersisted,
+            },
+          });
+        } catch (cacheError) {
+          console.error("Erro ao gravar cache do relatório:", cacheError);
+        }
+      }
 
       try {
         await addDoc(collection(db, "historico_talhoes"), {
@@ -125,158 +434,29 @@ export default function AgroOSDashboard() {
           areaAfetada: analise.areaEstresseHa,
           roiProjetado: veredito.roiEstimado,
           vereditoSistema: veredito.status,
-          parecerIA: cached.relatorio,
-          modo: "CACHE",
+          parecerIA: data.relatorio,
+          modo: data.fallback ? "LOCAL_FALLBACK" : imagemMapa ? "MULTIMODAL" : "TECNICO",
           modoRelatorio: reportMode,
+          providerUsed,
+          attemptedProviders,
+          routeId: routeTelemetry?.routeId || null,
+          totalDurationMs: routeTelemetry?.totalDurationMs || null,
+          telemetryPersisted,
           assinaturaCenario: cacheKey,
           sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
           dataRegistro: serverTimestamp(),
         });
       } catch (dbError) {
-        console.error("Erro ao gravar histórico do cache:", dbError);
+        console.error("Erro ao gravar histórico no banco:", dbError);
       }
-
-      alert(`Laudo recuperado do cache técnico do Agro OS (${reportMode}).`);
-      return;
+    } catch (error) {
+      console.error("Falha ao gerar relatório:", error);
+      alert("Falha de conexão com a API do relatório.");
+    } finally {
+      setGerandoIA(false);
     }
-
-    if (reportMode === "LOCAL") {
-      const relatorioLocal = buildLocalTechnicalReport({
-        operacao,
-        analise,
-        mercado,
-        veredito,
-        origem: "MOTOR LOCAL (ACIONAMENTO DIRETO)",
-      });
-
-      setRelatorioExecutivo(relatorioLocal);
-
-      try {
-        await writeCachedReport({
-          signature: cacheKey,
-          relatorio: relatorioLocal,
-          source: "LOCAL_FALLBACK",
-          fingerprint,
-          metadata: {
-            cultura: operacao.cultura,
-            regiao: operacao.regiao,
-            faseFenologica: analise.faseFenologica,
-            statusVeredito: veredito.status,
-            sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
-            modoRelatorio: reportMode,
-            possuiMapa: !!imagemMapa,
-          },
-        });
-      } catch (cacheError) {
-        console.error("Erro ao gravar cache local:", cacheError);
-      }
-
-      try {
-        await addDoc(collection(db, "historico_talhoes"), {
-          talhao: operacao.talhao || "Talhão Não Identificado",
-          cultura: operacao.cultura,
-          regiao: operacao.regiao,
-          faseFenologica: analise.faseFenologica,
-          fosforo: operacao.fosforoMehlich,
-          areaAfetada: analise.areaEstresseHa,
-          roiProjetado: veredito.roiEstimado,
-          vereditoSistema: veredito.status,
-          parecerIA: relatorioLocal,
-          modo: "LOCAL_DIRETO",
-          modoRelatorio: reportMode,
-          assinaturaCenario: cacheKey,
-          sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
-          dataRegistro: serverTimestamp()
-        });
-      } catch (dbError) {
-        console.error("Erro ao gravar histórico local:", dbError);
-      }
-
-      return;
-    }
-
-    const response = await fetch('/api/relatorio', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        operacao,
-        analise,
-        mercado,
-        veredito,
-        imagemBase64: imagemMapa || null,
-        possuiMapa: !!imagemMapa,
-        reportMode,
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      alert(data.error || "Erro desconhecido na API.");
-      return;
-    }
-
-    if (!data.relatorio) {
-      alert(data.error || "Erro desconhecido na API.");
-      return;
-    }
-
-    setRelatorioExecutivo(data.relatorio);
-
-    try {
-      await writeCachedReport({
-        signature: cacheKey,
-        relatorio: data.relatorio,
-        source: data.fallback ? "LOCAL_FALLBACK" : "IA_EXTERNA",
-        fingerprint,
-        metadata: {
-          cultura: operacao.cultura,
-          regiao: operacao.regiao,
-          faseFenologica: analise.faseFenologica,
-          statusVeredito: veredito.status,
-          sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
-          modoRelatorio: reportMode,
-          possuiMapa: !!imagemMapa,
-          fallback: !!data.fallback,
-          modeReturned: data.mode || null,
-        },
-      });
-    } catch (cacheError) {
-      console.error("Erro ao gravar cache do relatório:", cacheError);
-    }
-
-    try {
-      await addDoc(collection(db, "historico_talhoes"), {
-        talhao: operacao.talhao || "Talhão Não Identificado",
-        cultura: operacao.cultura,
-        regiao: operacao.regiao,
-        faseFenologica: analise.faseFenologica,
-        fosforo: operacao.fosforoMehlich,
-        areaAfetada: analise.areaEstresseHa,
-        roiProjetado: veredito.roiEstimado,
-        vereditoSistema: veredito.status,
-        parecerIA: data.relatorio,
-        modo: data.fallback ? "LOCAL_FALLBACK" : (imagemMapa ? "MULTIMODAL" : "TECNICO"),
-        modoRelatorio: reportMode,
-        assinaturaCenario: cacheKey,
-        sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
-        dataRegistro: serverTimestamp()
-      });
-    } catch (dbError) {
-      console.error("Erro ao gravar histórico no banco:", dbError);
-    }
-
-    if (data.warning) {
-      alert(data.warning);
-    }
-  } catch (error) {
-    console.error("Falha ao gerar relatório:", error);
-    alert("Falha de conexão com a API do relatório.");
-  } finally {
-    setGerandoIA(false);
-  }
-};
-
+  };
+  
   const handleVerHistorico = async () => {
     setModalHistorico(true);
     setCarregandoHistorico(true);
@@ -407,6 +587,9 @@ const parametrosCulturaUI = {
             setReportMode={setReportMode}
             onSincronizarMercado={handleSincronizarMercado}
             onGerarRelatorioIA={handleGerarRelatorioIA}
+            providersHealth={providersHealth}
+            providersConfig={providersConfig}
+            providerHealthLoading={providerHealthLoading}
           />
         </div>
 
@@ -472,6 +655,7 @@ const parametrosCulturaUI = {
           <TechnicalReportCard
             relatorioExecutivo={relatorioExecutivo}
             imagemMapa={imagemMapa}
+            reportRuntime={reportRuntime}
           />
         </div>
       </div>
@@ -492,6 +676,7 @@ const parametrosCulturaUI = {
         onFechar={() => setModalHistorico(false)}
         onCarregarLaudo={(parecerIA) => {
           setRelatorioExecutivo(parecerIA);
+          setReportRuntime(null);
           setModalHistorico(false);
         }}
       />
