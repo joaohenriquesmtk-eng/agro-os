@@ -8,25 +8,12 @@ import {
   WifiOff,
 } from "lucide-react";
 import type React from "react";
-
-type ProviderName = "GEMINI" | "OPENROUTER" | "OPENAI";
-type ProviderHealthStatus = "ONLINE" | "RATE_LIMITED" | "DEGRADED" | "OFFLINE";
-
-interface ProviderHealthSnapshot {
-  provider: ProviderName;
-  status: ProviderHealthStatus;
-  cooldownUntil: string | null;
-  consecutiveFailures: number;
-  lastFailureAt: string | null;
-  lastSuccessAt: string | null;
-  lastHttpStatus: number | null;
-  lastErrorCode: string | null;
-  lastErrorMessage: string | null;
-  updatedAt: string;
-}
-
-type ProvidersHealthMap = Partial<Record<ProviderName, ProviderHealthSnapshot>>;
-type ProvidersConfigMap = Record<ProviderName, boolean>;
+import type {
+  ProviderHealthSnapshot,
+  ProvidersConfigMap,
+  ProvidersHealthMap,
+  ProviderName,
+} from "../types/report";
 
 interface OperationsCardProps {
   sincronizando: boolean;

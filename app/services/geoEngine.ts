@@ -10,8 +10,12 @@ import {
   SeasonalAnalysis,
 } from "../domain/agro/seasonality";
 import { resolveCultureProfile, type CultureProfile } from "../domain/agro/cultureProfiles";
+import type {
+  ModoAnaliseEconomica,
+  StatusVeredito,
+  VereditoFinal,
+} from "../types/agronomy";
 
-type StatusVeredito = "AUTORIZADO" | "RISCO_ELEVADO" | "BLOQUEADO";
 type ClasseNutriente =
   | "MUITO_BAIXO"
   | "BAIXO"
@@ -19,44 +23,6 @@ type ClasseNutriente =
   | "ADEQUADO"
   | "ALTO"
   | "MUITO_ALTO";
-
-type ModoAnaliseEconomica =
-  | "INTERVENCAO_PROPOSTA"
-  | "NAO_INTERVENCAO_RECOMENDADA";
-
-interface VereditoLeituraEconomica {
-  modoAnalise: ModoAnaliseEconomica;
-  custoTotalAdubacao: number;
-  retornoFinanceiroEstimado: number;
-  margemSobreCusto: number | null;
-  precoReferencia: number;
-  custoEvitado: number;
-  roiIncrementalAplicacao: number | null;
-  observacaoEconomica: string;
-}
-
-interface VereditoDiagnosticoSolo {
-  classeFosforo: string;
-  classePotassio: string;
-  pressaoNutricional: string;
-}
-
-interface VereditoFinal {
-  status: StatusVeredito;
-  roiEstimado: number;
-  justificativa: string;
-  fatorLimitante: string;
-  doseMapHa: number;
-  doseKclHa: number;
-  doseUreaHa: number;
-  scoreConfianca: number;
-  classificacaoFinanceira: string;
-  premissasCriticas: string[];
-  fatoresDeterminantes: string[];
-  leituraEconomica: VereditoLeituraEconomica;
-  diagnosticoSolo: VereditoDiagnosticoSolo;
-  analiseSazonal: SeasonalAnalysis;
-}
 
 interface ParametrosRegionais {
   eficienciaBase: number;
@@ -96,7 +62,7 @@ function normalizeAnalise(analise: AnaliseEspectral): AnaliseEspectral {
 }
 
 function getMarketConfidence(mercado: MercadoFinanceiro): number {
-  const status = (mercado as any).statusMercado;
+  const status = mercado.statusMercado;
   if (status === "OK") return 1;
   if (status === "PARTIAL") return 0.82;
   return 0.62;
@@ -283,7 +249,7 @@ function getConfidenceScore(input: {
 
   let score = 5.5;
 
-  const marketStatus = (mercado as any).statusMercado;
+  const marketStatus = mercado.statusMercado;
   if (marketStatus === "OK") score += 1.4;
   else if (marketStatus === "PARTIAL") score += 0.8;
   else score += 0.2;

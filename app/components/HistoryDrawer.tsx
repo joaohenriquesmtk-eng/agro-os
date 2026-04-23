@@ -1,20 +1,10 @@
 import { ChevronRight, Clock, FileText, RefreshCcw, X } from "lucide-react";
-
-interface HistoryItem {
-  id: string;
-  dataFormatada?: string;
-  vereditoSistema?: string;
-  talhao?: string;
-  modo?: string;
-  parecerIA?: string;
-  cultura?: string;
-  areaAfetada?: number;
-}
+import type { HistoryEntry } from "../types/report";
 
 interface HistoryDrawerProps {
   aberto: boolean;
   carregando: boolean;
-  listaHistorico: HistoryItem[];
+  listaHistorico: HistoryEntry[];
   onFechar: () => void;
   onCarregarLaudo: (parecerIA: string) => void;
 }
@@ -64,6 +54,8 @@ export default function HistoryDrawer({
                     className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
                       item.vereditoSistema === "AUTORIZADO"
                         ? "bg-emerald-500/10 text-emerald-500"
+                        : item.vereditoSistema === "RISCO_ELEVADO"
+                        ? "bg-yellow-500/10 text-yellow-500"
                         : "bg-red-500/10 text-red-500"
                     }`}
                   >

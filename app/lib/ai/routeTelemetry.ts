@@ -1,19 +1,25 @@
 import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "../firebaseAdmin";
+import type { AnaliseEspectral, DadosOperacionais, VereditoFinal } from "../../types/agronomy";
+import type {
+  ProvidersConfigMap,
+  ProvidersHealthMap,
+  RouteTelemetrySummary,
+} from "../../types/report";
 
 const COLLECTION_NAME = "telemetria_rotas_ia";
 
 interface PersistTechnicalRouteTelemetryInput {
-  routeTelemetry: any;
+  routeTelemetry: RouteTelemetrySummary | null;
   requestedMode: "IA_REFINADA";
   finalMode: "IA_REFINADA" | "LOCAL";
   warning: string | null;
-  providersConfig: Record<string, boolean>;
-  providersHealth: Record<string, unknown> | null;
-  operacao: any;
-  analise: any;
-  veredito: any;
+  providersConfig: ProvidersConfigMap;
+  providersHealth: ProvidersHealthMap | null;
+  operacao: DadosOperacionais;
+  analise: AnaliseEspectral;
+  veredito: VereditoFinal;
   possuiMapa: boolean;
 }
 
@@ -56,13 +62,13 @@ export async function persistTechnicalRouteTelemetry(
           providersConfig,
           providersHealth: providersHealth || null,
           contextoOperacional: {
-            cultura: operacao?.cultura || null,
-            regiao: operacao?.regiao || null,
-            talhao: operacao?.talhao || null,
-            faseFenologica: analise?.faseFenologica || null,
+            cultura: operacao.cultura || null,
+            regiao: operacao.regiao || null,
+            talhao: operacao.talhao || null,
+            faseFenologica: analise.faseFenologica || null,
             possuiMapa,
-            statusVeredito: veredito?.status || null,
-            sistemaProdutivo: veredito?.analiseSazonal?.sistemaProdutivo || null,
+            statusVeredito: veredito.status || null,
+            sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
           },
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),

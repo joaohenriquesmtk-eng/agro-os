@@ -6,23 +6,45 @@ import { getProvidersHealth } from "../../lib/providerHealth";
 import { getTechnicalReportProviderConfig } from "../../lib/ai/providers";
 import { orchestrateRefinedTechnicalReport } from "../../lib/ai/providerOrchestrator";
 import { persistTechnicalRouteTelemetry } from "../../lib/ai/routeTelemetry";
+import type { TechnicalReportScenario } from "../../types/agronomy";
+import type {
+  ProviderAttemptLog,
+  ProvidersConfigMap,
+  ProvidersHealthMap,
+  RouteTelemetrySummary,
+} from "../../types/report";
+import type {
+  ReportGenerationRequest,
+  ReportMode,
+  RelatorioApiErrorResponse,
+  RelatorioApiSuccessResponse,
+} from "../../types/relatorioApi";
 
-type ReportMode = "LOCAL" | "IA_REFINADA";
-
-function buildLocalResponse(input: {
-  operacao: any;
-  analise: any;
-  mercado: any;
-  veredito: any;
+interface LocalResponseInput extends TechnicalReportScenario {
   origem: string;
   fallback: boolean;
   warning?: string | null;
-  attemptedProviders?: any[];
-  routeTelemetry?: any | null;
+  attemptedProviders?: ProviderAttemptLog[];
+  routeTelemetry?: RouteTelemetrySummary | null;
   telemetryPersisted?: boolean;
-  providersHealth?: any;
-  providersConfig?: any;
-}) {
+  providersHealth?: ProvidersHealthMap | null;
+  providersConfig?: ProvidersConfigMap;
+}
+
+function isReportGenerationRequest(value: unknown): value is ReportGenerationRequest {
+  if (!value || typeof value !== "object") return false;
+
+  const payload = value as Partial<ReportGenerationRequest>;
+
+  return Boolean(
+    payload.operacao &&
+      payload.analise &&
+      payload.mercado &&
+      payload.veredito
+  );
+}
+
+function buildLocalResponse(input: LocalResponseInput) {
   const {
     operacao,
     analise,
@@ -46,7 +68,7 @@ function buildLocalResponse(input: {
     origem,
   });
 
-  return NextResponse.json({
+  const response: RelatorioApiSuccessResponse = {
     relatorio,
     mode: "LOCAL",
     fallback,
@@ -57,7 +79,9 @@ function buildLocalResponse(input: {
     telemetryPersisted,
     providersHealth,
     providersConfig,
-  });
+  };
+
+  return NextResponse.json(response);
 }
 
 export async function GET() {
@@ -68,10 +92,20 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  let dados: any = null;
+  let dados: ReportGenerationRequest | null = null;
 
   try {
-    dados = await req.json();
+    const body = (await req.json()) as unknown;
+
+    if (!isReportGenerationRequest(body)) {
+      const response: RelatorioApiErrorResponse = {
+        error: "Payload inválido para geração do relatório.",
+      };
+
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    dados = body;
 
     const {
       operacao,
@@ -80,14 +114,7 @@ export async function POST(req: Request) {
       veredito,
       imagemBase64,
       reportMode = "IA_REFINADA",
-    } = dados as {
-      operacao: any;
-      analise: any;
-      mercado: any;
-      veredito: any;
-      imagemBase64?: string | null;
-      reportMode?: ReportMode;
-    };
+    } = dados;
 
     if (reportMode === "LOCAL") {
       return buildLocalResponse({
@@ -114,7 +141,7 @@ export async function POST(req: Request) {
       finalMode: orchestration.ok ? "IA_REFINADA" : "LOCAL",
       warning: orchestration.warning || null,
       providersConfig: orchestration.providersConfig,
-      providersHealth: orchestration.providersHealth as Record<string, unknown>,
+      providersHealth: orchestration.providersHealth,
       operacao,
       analise,
       veredito,
@@ -122,7 +149,7 @@ export async function POST(req: Request) {
     });
 
     if (orchestration.ok) {
-      return NextResponse.json({
+      const response: RelatorioApiSuccessResponse = {
         relatorio: orchestration.relatorio,
         mode: "IA_REFINADA",
         fallback: false,
@@ -133,7 +160,9 @@ export async function POST(req: Request) {
         telemetryPersisted,
         providersHealth: orchestration.providersHealth,
         providersConfig: orchestration.providersConfig,
-      });
+      };
+
+      return NextResponse.json(response);
     }
 
     const relatorioLocal = buildLocalTechnicalReport({
@@ -144,7 +173,7 @@ export async function POST(req: Request) {
       origem: "FALLBACK LOCAL APÓS ESGOTAR ROTA EXTERNA",
     });
 
-    return NextResponse.json({
+    const response: RelatorioApiSuccessResponse = {
       relatorio: relatorioLocal,
       mode: "LOCAL",
       fallback: true,
@@ -155,8 +184,10 @@ export async function POST(req: Request) {
       telemetryPersisted,
       providersHealth: orchestration.providersHealth,
       providersConfig: orchestration.providersConfig,
-    });
-  } catch (error: any) {
+    };
+
+    return NextResponse.json(response);
+  } catch (error: unknown) {
     console.error("Erro interno no servidor Agro OS:", error);
 
     if (dados?.operacao && dados?.analise && dados?.mercado && dados?.veredito) {
@@ -172,11 +203,13 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json(
-      {
-        error: error?.message || "Falha interna ao processar a solicitação.",
-      },
-      { status: 500 }
-    );
+    const response: RelatorioApiErrorResponse = {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Falha interna ao processar a solicitação.",
+    };
+
+    return NextResponse.json(response, { status: 500 });
   }
 }

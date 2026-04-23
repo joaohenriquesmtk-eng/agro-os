@@ -1,52 +1,5 @@
 import { AlertOctagon, CheckCircle2, ShieldAlert } from "lucide-react";
-
-type ModoAnaliseEconomica =
-  | "INTERVENCAO_PROPOSTA"
-  | "NAO_INTERVENCAO_RECOMENDADA";
-
-type SeasonalPlausibility = "COERENTE" | "ATENCAO" | "FORA_DO_PADRAO";
-
-interface VereditoLeituraEconomica {
-  modoAnalise?: ModoAnaliseEconomica;
-  custoTotalAdubacao?: number;
-  retornoFinanceiroEstimado?: number;
-  margemSobreCusto?: number | null;
-  precoReferencia?: number;
-  custoEvitado?: number;
-  roiIncrementalAplicacao?: number | null;
-  observacaoEconomica?: string;
-}
-
-interface VereditoDiagnosticoSolo {
-  classeFosforo?: string;
-  classePotassio?: string;
-  pressaoNutricional?: string;
-}
-
-interface VereditoAnaliseSazonal {
-  plausibilidade?: SeasonalPlausibility;
-  mesAtual?: number;
-  janelaEsperada?: string;
-  observacao?: string;
-  sistemaProdutivo?: string;
-}
-
-interface VereditoFinal {
-  status: "AUTORIZADO" | "RISCO_ELEVADO" | "BLOQUEADO";
-  roiEstimado: number;
-  justificativa: string;
-  fatorLimitante: string;
-  doseMapHa: number;
-  doseKclHa: number;
-  doseUreaHa: number;
-  scoreConfianca?: number;
-  classificacaoFinanceira?: string;
-  premissasCriticas?: string[];
-  fatoresDeterminantes?: string[];
-  leituraEconomica?: VereditoLeituraEconomica;
-  diagnosticoSolo?: VereditoDiagnosticoSolo;
-  analiseSazonal?: VereditoAnaliseSazonal;
-}
+import type { VereditoFinal } from "../types/agronomy";
 
 interface DecisionVerdictCardProps {
   veredito: VereditoFinal | null;
@@ -88,7 +41,9 @@ function getRoiHeadline(veredito: VereditoFinal) {
   };
 }
 
-function renderSeasonalLabel(plausibilidade?: SeasonalPlausibility) {
+function renderSeasonalLabel(
+  plausibilidade?: VereditoFinal["analiseSazonal"]["plausibilidade"]
+) {
   if (plausibilidade === "COERENTE") return "Coerente";
   if (plausibilidade === "ATENCAO") return "Atenção";
   if (plausibilidade === "FORA_DO_PADRAO") return "Fora do padrão";
@@ -162,144 +117,142 @@ export default function DecisionVerdictCard({ veredito }: DecisionVerdictCardPro
             </p>
           </div>
 
-          {(veredito.leituraEconomica || veredito.diagnosticoSolo || veredito.analiseSazonal) && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800/50">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">
-                  Auditoria Econômica
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800/50">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">
+                Auditoria Econômica
+              </p>
+              <div className="space-y-2 text-sm">
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Modo econômico</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.leituraEconomica.modoAnalise === "NAO_INTERVENCAO_RECOMENDADA"
+                      ? "Não intervenção"
+                      : "Intervenção proposta"}
+                  </span>
                 </p>
-                <div className="space-y-2 text-sm">
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Modo econômico</span>
-                    <span className="text-slate-200 font-medium">
-                      {veredito.leituraEconomica?.modoAnalise === "NAO_INTERVENCAO_RECOMENDADA"
-                        ? "Não intervenção"
-                        : "Intervenção proposta"}
-                    </span>
-                  </p>
 
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Custo total estimado</span>
-                    <span className="text-slate-200 font-mono">
-                      {formatCurrency(veredito.leituraEconomica?.custoTotalAdubacao)}
-                    </span>
-                  </p>
-
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Retorno estimado</span>
-                    <span className="text-slate-200 font-mono">
-                      {formatCurrency(veredito.leituraEconomica?.retornoFinanceiroEstimado)}
-                    </span>
-                  </p>
-
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">ROI incremental</span>
-                    <span className="text-slate-200 font-mono">
-                      {veredito.leituraEconomica?.modoAnalise === "NAO_INTERVENCAO_RECOMENDADA"
-                        ? "N/A"
-                        : formatCurrency(veredito.leituraEconomica?.roiIncrementalAplicacao)}
-                    </span>
-                  </p>
-
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Margem sobre custo</span>
-                    <span className="text-slate-200 font-mono">
-                      {veredito.leituraEconomica?.modoAnalise === "NAO_INTERVENCAO_RECOMENDADA"
-                        ? "N/A"
-                        : formatPercent(veredito.leituraEconomica?.margemSobreCusto)}
-                    </span>
-                  </p>
-
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Custo evitado</span>
-                    <span className="text-slate-200 font-mono">
-                      {formatCurrency(veredito.leituraEconomica?.custoEvitado)}
-                    </span>
-                  </p>
-
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Preço referência</span>
-                    <span className="text-slate-200 font-mono">
-                      {formatCurrency(veredito.leituraEconomica?.precoReferencia)}
-                    </span>
-                  </p>
-
-                  <p className="pt-2 text-xs text-slate-500 leading-relaxed">
-                    {veredito.leituraEconomica?.observacaoEconomica || "Sem observação econômica."}
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800/50">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">
-                  Diagnóstico do Solo
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Custo total estimado</span>
+                  <span className="text-slate-200 font-mono">
+                    {formatCurrency(veredito.leituraEconomica.custoTotalAdubacao)}
+                  </span>
                 </p>
-                <div className="space-y-2 text-sm">
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Classe de fósforo</span>
-                    <span className="text-slate-200 font-medium">
-                      {veredito.diagnosticoSolo?.classeFosforo || "N/D"}
-                    </span>
-                  </p>
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Classe de potássio</span>
-                    <span className="text-slate-200 font-medium">
-                      {veredito.diagnosticoSolo?.classePotassio || "N/D"}
-                    </span>
-                  </p>
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Pressão nutricional</span>
-                    <span className="text-slate-200 font-medium">
-                      {veredito.diagnosticoSolo?.pressaoNutricional || "N/D"}
-                    </span>
-                  </p>
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Classificação financeira</span>
-                    <span className="text-slate-200 font-medium">
-                      {veredito.classificacaoFinanceira || "N/D"}
-                    </span>
-                  </p>
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Confiança do motor</span>
-                    <span className="text-slate-200 font-medium">
-                      {typeof veredito.scoreConfianca === "number"
-                        ? `${veredito.scoreConfianca.toFixed(1)} / 10`
-                        : "N/D"}
-                    </span>
-                  </p>
-                </div>
-              </div>
 
-              <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800/50">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">
-                  Coerência Sazonal
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Retorno estimado</span>
+                  <span className="text-slate-200 font-mono">
+                    {formatCurrency(veredito.leituraEconomica.retornoFinanceiroEstimado)}
+                  </span>
                 </p>
-                <div className="space-y-2 text-sm">
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Plausibilidade</span>
-                    <span className="text-slate-200 font-medium">
-                      {renderSeasonalLabel(veredito.analiseSazonal?.plausibilidade)}
-                    </span>
-                  </p>
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Sistema</span>
-                    <span className="text-slate-200 font-medium text-right">
-                      {veredito.analiseSazonal?.sistemaProdutivo || "N/D"}
-                    </span>
-                  </p>
-                  <p className="flex justify-between gap-3">
-                    <span className="text-slate-400">Janela padrão</span>
-                    <span className="text-slate-200 font-medium text-right">
-                      {veredito.analiseSazonal?.janelaEsperada || "N/D"}
-                    </span>
-                  </p>
-                  <p className="pt-2 text-xs text-slate-500 leading-relaxed">
-                    {veredito.analiseSazonal?.observacao || "Sem observação sazonal."}
-                  </p>
-                </div>
+
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">ROI incremental</span>
+                  <span className="text-slate-200 font-mono">
+                    {veredito.leituraEconomica.modoAnalise === "NAO_INTERVENCAO_RECOMENDADA"
+                      ? "N/A"
+                      : formatCurrency(veredito.leituraEconomica.roiIncrementalAplicacao)}
+                  </span>
+                </p>
+
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Margem sobre custo</span>
+                  <span className="text-slate-200 font-mono">
+                    {veredito.leituraEconomica.modoAnalise === "NAO_INTERVENCAO_RECOMENDADA"
+                      ? "N/A"
+                      : formatPercent(veredito.leituraEconomica.margemSobreCusto)}
+                  </span>
+                </p>
+
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Custo evitado</span>
+                  <span className="text-slate-200 font-mono">
+                    {formatCurrency(veredito.leituraEconomica.custoEvitado)}
+                  </span>
+                </p>
+
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Preço referência</span>
+                  <span className="text-slate-200 font-mono">
+                    {formatCurrency(veredito.leituraEconomica.precoReferencia)}
+                  </span>
+                </p>
+
+                <p className="pt-2 text-xs text-slate-500 leading-relaxed">
+                  {veredito.leituraEconomica.observacaoEconomica || "Sem observação econômica."}
+                </p>
               </div>
             </div>
-          )}
+
+            <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800/50">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">
+                Diagnóstico do Solo
+              </p>
+              <div className="space-y-2 text-sm">
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Classe de fósforo</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.diagnosticoSolo.classeFosforo || "N/D"}
+                  </span>
+                </p>
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Classe de potássio</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.diagnosticoSolo.classePotassio || "N/D"}
+                  </span>
+                </p>
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Pressão nutricional</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.diagnosticoSolo.pressaoNutricional || "N/D"}
+                  </span>
+                </p>
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Classificação financeira</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.classificacaoFinanceira || "N/D"}
+                  </span>
+                </p>
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Confiança do motor</span>
+                  <span className="text-slate-200 font-medium">
+                    {typeof veredito.scoreConfianca === "number"
+                      ? `${veredito.scoreConfianca.toFixed(1)} / 10`
+                      : "N/D"}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800/50">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">
+                Coerência Sazonal
+              </p>
+              <div className="space-y-2 text-sm">
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Plausibilidade</span>
+                  <span className="text-slate-200 font-medium">
+                    {renderSeasonalLabel(veredito.analiseSazonal?.plausibilidade)}
+                  </span>
+                </p>
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Sistema</span>
+                  <span className="text-slate-200 font-medium text-right">
+                    {veredito.analiseSazonal?.sistemaProdutivo || "N/D"}
+                  </span>
+                </p>
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Janela padrão</span>
+                  <span className="text-slate-200 font-medium text-right">
+                    {veredito.analiseSazonal?.janelaEsperada || "N/D"}
+                  </span>
+                </p>
+                <p className="pt-2 text-xs text-slate-500 leading-relaxed">
+                  {veredito.analiseSazonal?.observacao || "Sem observação sazonal."}
+                </p>
+              </div>
+            </div>
+          </div>
 
           {Array.isArray(veredito.fatoresDeterminantes) && veredito.fatoresDeterminantes.length > 0 && (
             <div className="bg-slate-950/40 p-4 rounded-xl border border-slate-800/50">

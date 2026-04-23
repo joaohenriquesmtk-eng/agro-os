@@ -7,41 +7,11 @@ import {
   ShieldCheck,
   XCircle,
 } from "lucide-react";
-
-type ProviderName = "GEMINI" | "OPENROUTER" | "OPENAI";
-
-type ProviderAttemptLog = {
-  provider: ProviderName;
-  outcome: "SUCCESS" | "FAILED" | "SKIPPED_UNCONFIGURED" | "SKIPPED_COOLDOWN";
-  modelConfigured: string | null;
-  modelUsed: string | null;
-  durationMs: number;
-  startedAt: string;
-  finishedAt: string;
-  httpStatus: number | null;
-  errorCode: string | null;
-  errorMessage: string | null;
-};
-
-type RouteTelemetrySummary = {
-  routeId: string;
-  startedAt: string;
-  finishedAt: string;
-  totalDurationMs: number;
-  providerUsed: ProviderName | null;
-  fallback: boolean;
-  attemptedProviders: ProviderAttemptLog[];
-};
-
-type ReportRuntimeState = {
-  mode: "LOCAL" | "IA_REFINADA";
-  fallback: boolean;
-  warning: string | null;
-  providerUsed: ProviderName | null;
-  attemptedProviders: ProviderAttemptLog[];
-  routeTelemetry: RouteTelemetrySummary | null;
-  telemetryPersisted: boolean;
-} | null;
+import type {
+  ProviderAttemptLog,
+  ProviderName,
+  ReportRuntimeState,
+} from "../types/report";
 
 type AccentVariant = "emerald" | "indigo" | "amber" | "slate";
 
@@ -161,7 +131,7 @@ function renderRelatorioSeguro(texto: string, accent: AccentVariant) {
   });
 }
 
-function getVisualConfig(reportRuntime: ReportRuntimeState, imagemMapa: boolean) {
+function getVisualConfig(reportRuntime: ReportRuntimeState | null, imagemMapa: boolean) {
   if (!reportRuntime) {
     return {
       accent: "slate" as AccentVariant,
@@ -214,7 +184,7 @@ function getVisualConfig(reportRuntime: ReportRuntimeState, imagemMapa: boolean)
 interface TechnicalReportCardProps {
   relatorioExecutivo: string | null;
   imagemMapa: string | null;
-  reportRuntime: ReportRuntimeState;
+  reportRuntime: ReportRuntimeState | null;
 }
 
 export default function TechnicalReportCard({

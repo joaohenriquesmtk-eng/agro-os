@@ -1,10 +1,8 @@
+import type { TechnicalReportScenario } from "../../../types/agronomy";
+
 export type ReportProviderName = "GEMINI" | "OPENROUTER" | "OPENAI";
 
-export interface ReportGenerationInput {
-  operacao: any;
-  analise: any;
-  mercado: any;
-  veredito: any;
+export interface ReportGenerationInput extends TechnicalReportScenario {
   imagemBase64?: string | null;
 }
 
