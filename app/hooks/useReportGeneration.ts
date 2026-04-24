@@ -6,7 +6,11 @@ import { db } from "../lib/firebase";
 import { buildLocalTechnicalReport } from "../domain/agro/localReportBuilder";
 import { buildScenarioSignature } from "../domain/agro/scenarioSignature";
 import { readCachedReport, writeCachedReport } from "../lib/reportCache";
-import type { HistoryFirestoreEntry } from "../types/persistence";
+import type {
+  CachedReportMetadata,
+  HistoryEntryMode,
+  HistoryFirestoreEntry,
+} from "../types/persistence";
 import type { DadosOperacionais, AnaliseEspectral, MercadoFinanceiro, VereditoFinal } from "../types/agronomy";
 import type {
   ProviderAttemptLog,
@@ -21,6 +25,130 @@ import type {
   RelatorioApiSuccessResponse,
   ReportMode,
 } from "../types/relatorioApi";
+
+function buildCacheMetadata(params: {
+  operacao: DadosOperacionais;
+  analise: AnaliseEspectral;
+  veredito: VereditoFinal;
+  reportMode: ReportMode;
+  imagemMapa: string | null;
+  fallback: boolean;
+  modeReturned: ReportMode;
+  providerUsed: ProviderName | null;
+  attemptedProviders: ProviderAttemptLog[];
+  routeTelemetry: RouteTelemetrySummary | null;
+  telemetryPersisted: boolean;
+}): CachedReportMetadata {
+  const {
+    operacao,
+    analise,
+    veredito,
+    reportMode,
+    imagemMapa,
+    fallback,
+    modeReturned,
+    providerUsed,
+    attemptedProviders,
+    routeTelemetry,
+    telemetryPersisted,
+  } = params;
+
+  return {
+    cultura: operacao.cultura,
+    regiao: operacao.regiao,
+    faseFenologica: analise.faseFenologica,
+    statusVeredito: veredito.status,
+    sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
+
+    phSolo: operacao.phSolo,
+    ctc: operacao.ctc,
+    materiaOrganica: operacao.materiaOrganica,
+    saturacaoBases: operacao.saturacaoBases,
+    teorArgila: operacao.teorArgila,
+    chuva7dMm: analise.chuva7dMm,
+
+    fatorLimitanteTecnico:
+      veredito.fatorLimitanteTecnico || veredito.fatorLimitante,
+    fatorLimitanteEconomico: veredito.fatorLimitanteEconomico ?? null,
+    severidadeContextoComplementar:
+      veredito.diagnosticoSolo?.severidadeContextoComplementar ?? null,
+
+    modoRelatorio: reportMode,
+    possuiMapa: !!imagemMapa,
+    fallback,
+    modeReturned,
+    providerUsed,
+    attemptedProviders,
+    routeTelemetry,
+    telemetryPersisted,
+  };
+}
+
+function buildHistoryEntry(params: {
+  operacao: DadosOperacionais;
+  analise: AnaliseEspectral;
+  veredito: VereditoFinal;
+  parecerIA: string;
+  modo: HistoryEntryMode;
+  reportMode: ReportMode;
+  providerUsed: ProviderName | null;
+  attemptedProviders: ProviderAttemptLog[];
+  routeTelemetry: RouteTelemetrySummary | null;
+  telemetryPersisted: boolean;
+  cacheKey: string;
+}): HistoryFirestoreEntry {
+  const {
+    operacao,
+    analise,
+    veredito,
+    parecerIA,
+    modo,
+    reportMode,
+    providerUsed,
+    attemptedProviders,
+    routeTelemetry,
+    telemetryPersisted,
+    cacheKey,
+  } = params;
+
+  return {
+    talhao: operacao.talhao || "Talhão Não Identificado",
+    cultura: operacao.cultura,
+    regiao: operacao.regiao,
+    faseFenologica: analise.faseFenologica,
+
+    fosforo: operacao.fosforoMehlich,
+    potassio: operacao.potassio,
+    phSolo: operacao.phSolo,
+    ctc: operacao.ctc,
+    materiaOrganica: operacao.materiaOrganica,
+    saturacaoBases: operacao.saturacaoBases,
+    teorArgila: operacao.teorArgila,
+    chuva7dMm: analise.chuva7dMm,
+
+    areaAfetada: analise.areaEstresseHa,
+    roiProjetado: veredito.roiEstimado,
+    vereditoSistema: veredito.status,
+
+    fatorLimitanteTecnico:
+      veredito.fatorLimitanteTecnico || veredito.fatorLimitante,
+    fatorLimitanteEconomico: veredito.fatorLimitanteEconomico ?? null,
+    severidadeContextoComplementar:
+      veredito.diagnosticoSolo?.severidadeContextoComplementar ?? null,
+
+    parecerIA,
+    modo,
+    modoRelatorio: reportMode,
+    providerUsed,
+    attemptedProviders,
+    routeId: routeTelemetry?.routeId || null,
+    totalDurationMs: routeTelemetry?.totalDurationMs || null,
+    telemetryPersisted,
+    assinaturaCenario: cacheKey,
+    sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
+    dataRegistro: serverTimestamp(),
+  };
+}
 
 interface UseReportGenerationParams {
   operacao: DadosOperacionais;
@@ -56,6 +184,8 @@ export function useReportGeneration({
     veredito,
   });
 
+  const latestScenarioKeyRef = useRef(scenarioStateKey);
+
   useEffect(() => {
     if (latestScenarioKeyRef.current !== scenarioStateKey) {
       latestScenarioKeyRef.current = scenarioStateKey;
@@ -64,13 +194,20 @@ export function useReportGeneration({
     }
   }, [scenarioStateKey]);
 
-  const latestScenarioKeyRef = useRef(scenarioStateKey);
-
   const handleGerarRelatorioIA = async () => {
     if (!veredito || gerandoIA) return;
 
     setGerandoIA(true);
     const scenarioKeyAtRequestStart = latestScenarioKeyRef.current;
+
+    const fatorLimitanteTecnico =
+      veredito.fatorLimitanteTecnico || veredito.fatorLimitante;
+
+    const fatorLimitanteEconomico =
+      veredito.fatorLimitanteEconomico ?? null;
+
+    const severidadeContextoComplementar =
+      veredito.diagnosticoSolo?.severidadeContextoComplementar ?? null;
 
     try {
       const { signature, fingerprint } = await buildScenarioSignature({
@@ -120,29 +257,21 @@ export function useReportGeneration({
         });
 
         try {
-          const historyEntry: HistoryFirestoreEntry = {
-            talhao: operacao.talhao || "Talhão Não Identificado",
-            cultura: operacao.cultura,
-            regiao: operacao.regiao,
-            faseFenologica: analise.faseFenologica,
-            fosforo: operacao.fosforoMehlich,
-            areaAfetada: analise.areaEstresseHa,
-            roiProjetado: veredito.roiEstimado,
-            vereditoSistema: veredito.status,
+          const historyEntry = buildHistoryEntry({
+            operacao,
+            analise,
+            veredito,
             parecerIA: cached.relatorio,
             modo: "CACHE",
-            modoRelatorio: reportMode,
+            reportMode,
             providerUsed,
             attemptedProviders,
-            routeId: routeTelemetry?.routeId || null,
-            totalDurationMs: routeTelemetry?.totalDurationMs || null,
+            routeTelemetry,
             telemetryPersisted,
-            assinaturaCenario: cacheKey,
-            sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
-            dataRegistro: serverTimestamp(),
-            };
+            cacheKey,
+          });
 
-            await addDoc(collection(db, "historico_talhoes"), historyEntry);
+          await addDoc(collection(db, "historico_talhoes"), historyEntry);
         } catch (dbError) {
           console.error("Erro ao gravar histórico do cache:", dbError);
         }
@@ -181,50 +310,40 @@ export function useReportGeneration({
             relatorio: relatorioLocal,
             source: "LOCAL_FALLBACK",
             fingerprint,
-            metadata: {
-              cultura: operacao.cultura,
-              regiao: operacao.regiao,
-              faseFenologica: analise.faseFenologica,
-              statusVeredito: veredito.status,
-              sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
-              modoRelatorio: reportMode,
-              possuiMapa: !!imagemMapa,
+            metadata: buildCacheMetadata({
+              operacao,
+              analise,
+              veredito,
+              reportMode,
+              imagemMapa,
               fallback: false,
               modeReturned: "LOCAL",
               providerUsed: null,
               attemptedProviders: [],
               routeTelemetry: null,
               telemetryPersisted: false,
-            },
+            }),
           });
         } catch (cacheError) {
           console.error("Erro ao gravar cache local:", cacheError);
         }
 
         try {
-          const historyEntry: HistoryFirestoreEntry = {
-            talhao: operacao.talhao || "Talhão Não Identificado",
-            cultura: operacao.cultura,
-            regiao: operacao.regiao,
-            faseFenologica: analise.faseFenologica,
-            fosforo: operacao.fosforoMehlich,
-            areaAfetada: analise.areaEstresseHa,
-            roiProjetado: veredito.roiEstimado,
-            vereditoSistema: veredito.status,
+          const historyEntry = buildHistoryEntry({
+            operacao,
+            analise,
+            veredito,
             parecerIA: relatorioLocal,
             modo: "LOCAL_DIRETO",
-            modoRelatorio: reportMode,
+            reportMode,
             providerUsed: null,
             attemptedProviders: [],
-            routeId: null,
-            totalDurationMs: null,
+            routeTelemetry: null,
             telemetryPersisted: false,
-            assinaturaCenario: cacheKey,
-            sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
-            dataRegistro: serverTimestamp(),
-            };
+            cacheKey,
+          });
 
-            await addDoc(collection(db, "historico_talhoes"), historyEntry);
+          await addDoc(collection(db, "historico_talhoes"), historyEntry);
         } catch (dbError) {
           console.error("Erro ao gravar histórico local:", dbError);
         }
@@ -292,21 +411,19 @@ export function useReportGeneration({
             relatorio: data.relatorio,
             source: "IA_EXTERNA",
             fingerprint,
-            metadata: {
-              cultura: operacao.cultura,
-              regiao: operacao.regiao,
-              faseFenologica: analise.faseFenologica,
-              statusVeredito: veredito.status,
-              sistemaProdutivo: veredito.analiseSazonal?.sistemaProdutivo || null,
-              modoRelatorio: reportMode,
-              possuiMapa: !!imagemMapa,
+            metadata: buildCacheMetadata({
+              operacao,
+              analise,
+              veredito,
+              reportMode,
+              imagemMapa,
               fallback: false,
               modeReturned: data.mode || "IA_REFINADA",
               providerUsed,
               attemptedProviders,
               routeTelemetry,
               telemetryPersisted,
-            },
+            }),
           });
         } catch (cacheError) {
           console.error("Erro ao gravar cache do relatório:", cacheError);
@@ -320,9 +437,19 @@ export function useReportGeneration({
             regiao: operacao.regiao,
             faseFenologica: analise.faseFenologica,
             fosforo: operacao.fosforoMehlich,
+            potassio: operacao.potassio,
+            phSolo: operacao.phSolo,
+            ctc: operacao.ctc,
+            materiaOrganica: operacao.materiaOrganica,
+            saturacaoBases: operacao.saturacaoBases,
+            teorArgila: operacao.teorArgila,
+            chuva7dMm: analise.chuva7dMm,
             areaAfetada: analise.areaEstresseHa,
             roiProjetado: veredito.roiEstimado,
             vereditoSistema: veredito.status,
+            fatorLimitanteTecnico,
+            fatorLimitanteEconomico,
+            severidadeContextoComplementar,
             parecerIA: data.relatorio,
             modo: data.fallback ? "LOCAL_FALLBACK" : imagemMapa ? "MULTIMODAL" : "TECNICO",
             modoRelatorio: reportMode,

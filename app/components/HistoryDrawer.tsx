@@ -1,6 +1,23 @@
 import { ChevronRight, Clock, FileText, RefreshCcw, X } from "lucide-react";
 import type { HistoryEntry } from "../types/report";
 
+function formatCurrency(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "N/D";
+  return `R$ ${value.toLocaleString("pt-BR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function renderModeLabel(mode?: string) {
+  if (mode === "CACHE") return "CACHE";
+  if (mode === "LOCAL_DIRETO") return "LOCAL";
+  if (mode === "LOCAL_FALLBACK") return "FALLBACK";
+  if (mode === "MULTIMODAL") return "MULTIMODAL";
+  if (mode === "TECNICO") return "TÉCNICO";
+  return mode || "N/D";
+}
+
 interface HistoryDrawerProps {
   aberto: boolean;
   carregando: boolean;
@@ -42,39 +59,96 @@ export default function HistoryDrawer({
             <p className="text-center text-slate-500 py-10">Nenhum registro encontrado.</p>
           ) : (
             listaHistorico.map((item) => (
-              <div
+                            <div
                 key={item.id}
                 className="bg-slate-950 border border-slate-800 p-4 rounded-xl hover:border-indigo-500/50 transition-all cursor-default group"
               >
-                <div className="flex justify-between items-start mb-2">
+                <div className="flex justify-between items-start mb-2 gap-3">
                   <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
                     {item.dataFormatada}
                   </span>
-                  <span
-                    className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
-                      item.vereditoSistema === "AUTORIZADO"
-                        ? "bg-emerald-500/10 text-emerald-500"
-                        : item.vereditoSistema === "RISCO_ELEVADO"
-                        ? "bg-yellow-500/10 text-yellow-500"
-                        : "bg-red-500/10 text-red-500"
-                    }`}
-                  >
-                    {item.vereditoSistema}
-                  </span>
+
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded uppercase bg-slate-800 text-slate-300">
+                      {renderModeLabel(item.modo)}
+                    </span>
+
+                    <span
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded uppercase ${
+                        item.vereditoSistema === "AUTORIZADO"
+                          ? "bg-emerald-500/10 text-emerald-500"
+                          : item.vereditoSistema === "RISCO_ELEVADO"
+                          ? "bg-yellow-500/10 text-yellow-500"
+                          : "bg-red-500/10 text-red-500"
+                      }`}
+                    >
+                      {item.vereditoSistema}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 mb-1">
-                  <h3 className="text-white font-bold text-sm">{item.talhao}</h3>
-                  {item.modo === "TECNICO" && <FileText className="w-3 h-3 text-indigo-500" />}
+                  <h3 className="text-white font-bold text-sm">
+                    {item.talhao || "Talhão não identificado"}
+                  </h3>
+                  {item.modo === "TECNICO" && (
+                    <FileText className="w-3 h-3 text-indigo-500" />
+                  )}
                 </div>
 
-                <p className="text-slate-400 text-xs line-clamp-2 italic mb-3">
-                  "{item.parecerIA?.substring(0, 100)}..."
+                <p className="text-slate-400 text-xs mb-3">
+                  {item.cultura || "N/D"} • {item.areaAfetada ?? "N/D"} ha
+                  {item.faseFenologica ? ` • ${item.faseFenologica}` : ""}
+                </p>
+
+                <div className="space-y-2 text-xs mb-3">
+                  <p className="text-slate-300">
+                    <span className="text-slate-500">ROI projetado:</span>{" "}
+                    {formatCurrency(item.roiProjetado)}
+                  </p>
+
+                  <p className="text-slate-300">
+                    <span className="text-slate-500">Sistema produtivo:</span>{" "}
+                    {item.sistemaProdutivo || "N/D"}
+                  </p>
+
+                  <p className="text-slate-300">
+                    <span className="text-slate-500">Limitante técnico:</span>{" "}
+                    {item.fatorLimitanteTecnico || "N/D"}
+                  </p>
+
+                  <p className="text-slate-300">
+                    <span className="text-slate-500">Limitante econômico:</span>{" "}
+                    {item.fatorLimitanteEconomico ||
+                      "Sem limitante econômico crítico"}
+                  </p>
+
+                  <p className="text-slate-300">
+                    <span className="text-slate-500">Severidade complementar:</span>{" "}
+                    {item.severidadeContextoComplementar || "N/D"}
+                  </p>
+
+                  <p className="text-slate-300">
+                    <span className="text-slate-500">Modo do laudo:</span>{" "}
+                    {item.modoRelatorio || "N/D"}
+                  </p>
+
+                  <p className="text-slate-300">
+                    <span className="text-slate-500">Provedor:</span>{" "}
+                    {item.providerUsed || "LOCAL"}
+                    {typeof item.totalDurationMs === "number"
+                      ? ` • ${item.totalDurationMs} ms`
+                      : ""}
+                  </p>
+                </div>
+
+                <p className="text-slate-400 text-xs line-clamp-3 italic mb-3">
+                  "{item.parecerIA?.substring(0, 180) || "Sem laudo"}..."
                 </p>
 
                 <div className="flex justify-between items-center pt-3 border-t border-slate-800/50">
-                  <span className="text-xs text-slate-500">
-                    {item.cultura} • {item.areaAfetada} ha
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+                    {item.telemetryPersisted ? "telemetria persistida" : "sem telemetria"}
                   </span>
 
                   <button

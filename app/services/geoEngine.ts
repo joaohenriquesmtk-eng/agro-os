@@ -610,82 +610,6 @@ function buildDecisionJustification(input: {
   }${sazonalFora}`;
 }
 
-function resolvePrimaryLimitingFactor(input: {
-  operacao: DadosOperacionais;
-  analise: AnaliseEspectral;
-  classeP: ClasseNutriente;
-  classeK: ClasseNutriente;
-  analiseSazonal: SeasonalAnalysis;
-  margemSobreCusto: number | null;
-  roi: number;
-  responseGlobal: number;
-  severity: "BAIXA" | "MODERADA" | "ALTA";
-  riscoRegional: string;
-}) {
-  const {
-    operacao,
-    analise,
-    classeP,
-    classeK,
-    analiseSazonal,
-    margemSobreCusto,
-    roi,
-    responseGlobal,
-    severity,
-    riscoRegional,
-  } = input;
-
-  if (analiseSazonal.plausibilidade === "FORA_DO_PADRAO") {
-    return "Incompatibilidade entre fase, cultura e janela agrícola regional.";
-  }
-
-  if (roi <= 0) {
-    return "Relação de troca desfavorável entre custo da intervenção e retorno incremental esperado.";
-  }
-
-  if (margemSobreCusto !== null && margemSobreCusto < 35) {
-    return "Margem econômica limitada para sustentar a intervenção com robustez.";
-  }
-
-  if (operacao.phSolo < 5) {
-    return "pH muito baixo, com forte restrição à eficiência agronômica da resposta.";
-  }
-
-  if (operacao.saturacaoBases < 40) {
-    return "Saturação por bases baixa, indicando ambiente químico pouco favorável.";
-  }
-
-  if (operacao.ctc < 6) {
-    return "CTC muito baixa, com menor capacidade tampão e maior instabilidade de resposta.";
-  }
-
-  if (analise.chuva7dMm < 8) {
-    return "Baixa chuva recente, limitando incorporação e resposta provável da intervenção.";
-  }
-
-  if (analise.chuva7dMm > 120) {
-    return "Excesso de chuva recente, elevando risco de perdas e resposta instável.";
-  }
-
-  if (classeP === "MUITO_BAIXO" || classeP === "BAIXO") {
-    return `Deficiência de fósforo em faixa ${formatClasse(classeP)}.`;
-  }
-
-  if (classeK === "MUITO_BAIXO" || classeK === "BAIXO") {
-    return `Deficiência de potássio em faixa ${formatClasse(classeK)}.`;
-  }
-
-  if (responseGlobal < 0.38) {
-    return "Resposta agronômica global moderada, reduzindo a robustez operacional da intervenção.";
-  }
-
-  if (severity === "ALTA") {
-    return "Severidade alta no contexto complementar do solo e ambiente.";
-  }
-
-  return riscoRegional;
-}
-
 function getPhReading(ph: number): string {
   if (ph < 5) return "MUITO BAIXO";
   if (ph < 5.5) return "BAIXO";
@@ -1247,19 +1171,6 @@ export const GeoEngine = {
       doseKclHa: doseKclHaFinal,
       doseUreaHa: doseUreaHaFinal,
       cultura: operacao.cultura,
-    });
-
-    fatorLimitante = resolvePrimaryLimitingFactor({
-      operacao,
-      analise,
-      classeP,
-      classeK,
-      analiseSazonal,
-      margemSobreCusto,
-      roi,
-      responseGlobal,
-      severity: agronomicContext.severity,
-      riscoRegional: regiao.risco,
     });
 
     const classificacaoFinanceira = getFinancialClassification(

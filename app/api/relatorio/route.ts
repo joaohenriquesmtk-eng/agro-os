@@ -31,16 +31,214 @@ interface LocalResponseInput extends TechnicalReportScenario {
   providersConfig?: ProvidersConfigMap;
 }
 
+const CULTURAS = new Set(["SOJA", "MILHO", "CANA", "ALGODAO", "TRIGO"]);
+const REGIOES = new Set([
+  "NORTE",
+  "NORDESTE",
+  "CENTRO_OESTE",
+  "SUDESTE",
+  "SUL",
+]);
+const STATUS_MERCADO = new Set(["OK", "PARTIAL", "DEGRADED"]);
+const STATUS_VEREDITO = new Set(["AUTORIZADO", "RISCO_ELEVADO", "BLOQUEADO"]);
+const REPORT_MODES = new Set(["LOCAL", "IA_REFINADA"]);
+const MODOS_ANALISE = new Set([
+  "INTERVENCAO_PROPOSTA",
+  "NAO_INTERVENCAO_RECOMENDADA",
+]);
+const PLAUSIBILIDADES = new Set(["COERENTE", "ATENCAO", "FORA_DO_PADRAO"]);
+const SEVERIDADES = new Set(["BAIXA", "MODERADA", "ALTA"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isOptionalString(value: unknown): value is string | null | undefined {
+  return value === null || value === undefined || typeof value === "string";
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isCulturaBrasil(value: unknown) {
+  return typeof value === "string" && CULTURAS.has(value);
+}
+
+function isRegiaoBrasil(value: unknown) {
+  return typeof value === "string" && REGIOES.has(value);
+}
+
+function isStatusMercado(value: unknown) {
+  return typeof value === "string" && STATUS_MERCADO.has(value);
+}
+
+function isStatusVeredito(value: unknown) {
+  return typeof value === "string" && STATUS_VEREDITO.has(value);
+}
+
+function isReportMode(value: unknown) {
+  return typeof value === "string" && REPORT_MODES.has(value);
+}
+
+function isModoAnalise(value: unknown) {
+  return typeof value === "string" && MODOS_ANALISE.has(value);
+}
+
+function isPlausibilidade(value: unknown) {
+  return typeof value === "string" && PLAUSIBILIDADES.has(value);
+}
+
+function isSeveridade(value: unknown) {
+  return typeof value === "string" && SEVERIDADES.has(value);
+}
+
+function isCotacoesPayload(value: unknown) {
+  if (!isRecord(value)) return false;
+
+  return (
+    isFiniteNumber(value.SOJA) &&
+    isFiniteNumber(value.MILHO) &&
+    isFiniteNumber(value.CANA) &&
+    isFiniteNumber(value.ALGODAO) &&
+    isFiniteNumber(value.TRIGO)
+  );
+}
+
+function isOperacaoPayload(value: unknown) {
+  if (!isRecord(value)) return false;
+
+  return (
+    isString(value.talhao) &&
+    isRegiaoBrasil(value.regiao) &&
+    isCulturaBrasil(value.cultura) &&
+    isFiniteNumber(value.produtividadeAlvo) &&
+    isFiniteNumber(value.fosforoMehlich) &&
+    isFiniteNumber(value.potassio) &&
+    isFiniteNumber(value.phSolo) &&
+    isFiniteNumber(value.ctc) &&
+    isFiniteNumber(value.materiaOrganica) &&
+    isFiniteNumber(value.saturacaoBases) &&
+    isFiniteNumber(value.teorArgila)
+  );
+}
+
+function isAnalisePayload(value: unknown) {
+  if (!isRecord(value)) return false;
+
+  return (
+    isFiniteNumber(value.areaEstresseHa) &&
+    isString(value.faseFenologica) &&
+    isString(value.indice) &&
+    isFiniteNumber(value.chuva7dMm)
+  );
+}
+
+function isMercadoPayload(value: unknown) {
+  if (!isRecord(value)) return false;
+
+  return (
+    isFiniteNumber(value.dolarPtax) &&
+    isCotacoesPayload(value.cotacoes) &&
+    isFiniteNumber(value.custoMapTon) &&
+    isFiniteNumber(value.custoKclTon) &&
+    isFiniteNumber(value.custoUreaTon) &&
+    isOptionalString(value.ultimaSincronizacao) &&
+    isStatusMercado(value.statusMercado) &&
+    isStringArray(value.avisosMercado) &&
+    isOptionalString(value.origemDolar) &&
+    isOptionalString(value.origemCommodities)
+  );
+}
+
+function isLeituraEconomicaPayload(value: unknown) {
+  if (!isRecord(value)) return false;
+
+  return (
+    isModoAnalise(value.modoAnalise) &&
+    isFiniteNumber(value.custoTotalAdubacao) &&
+    isFiniteNumber(value.retornoFinanceiroEstimado) &&
+    (value.margemSobreCusto === null || isFiniteNumber(value.margemSobreCusto)) &&
+    isFiniteNumber(value.precoReferencia) &&
+    isFiniteNumber(value.custoEvitado) &&
+    (value.roiIncrementalAplicacao === null ||
+      isFiniteNumber(value.roiIncrementalAplicacao)) &&
+    isString(value.observacaoEconomica)
+  );
+}
+
+function isDiagnosticoSoloPayload(value: unknown) {
+  if (!isRecord(value)) return false;
+
+  return (
+    isString(value.classeFosforo) &&
+    isString(value.classePotassio) &&
+    isString(value.pressaoNutricional) &&
+    isString(value.leituraPh) &&
+    isString(value.leituraCtc) &&
+    isString(value.leituraMateriaOrganica) &&
+    isString(value.leituraSaturacaoBases) &&
+    isString(value.leituraTexturaSolo) &&
+    isString(value.leituraChuvaRecente) &&
+    isSeveridade(value.severidadeContextoComplementar)
+  );
+}
+
+function isAnaliseSazonalPayload(value: unknown) {
+  if (!isRecord(value)) return false;
+
+  return (
+    isPlausibilidade(value.plausibilidade) &&
+    isString(value.sistemaProdutivo) &&
+    isString(value.janelaEsperada) &&
+    isString(value.observacao)
+  );
+}
+
+function isVereditoPayload(value: unknown) {
+  if (!isRecord(value)) return false;
+
+  return (
+    isStatusVeredito(value.status) &&
+    isFiniteNumber(value.roiEstimado) &&
+    isString(value.justificativa) &&
+    isString(value.fatorLimitante) &&
+    isString(value.fatorLimitanteTecnico) &&
+    (value.fatorLimitanteEconomico === null ||
+      isString(value.fatorLimitanteEconomico)) &&
+    isFiniteNumber(value.doseMapHa) &&
+    isFiniteNumber(value.doseKclHa) &&
+    isFiniteNumber(value.doseUreaHa) &&
+    isFiniteNumber(value.scoreConfianca) &&
+    isString(value.classificacaoFinanceira) &&
+    isStringArray(value.premissasCriticas) &&
+    isStringArray(value.fatoresDeterminantes) &&
+    isLeituraEconomicaPayload(value.leituraEconomica) &&
+    isDiagnosticoSoloPayload(value.diagnosticoSolo) &&
+    isAnaliseSazonalPayload(value.analiseSazonal)
+  );
+}
+
 function isReportGenerationRequest(value: unknown): value is ReportGenerationRequest {
-  if (!value || typeof value !== "object") return false;
+  if (!isRecord(value)) return false;
 
-  const payload = value as Partial<ReportGenerationRequest>;
-
-  return Boolean(
-    payload.operacao &&
-      payload.analise &&
-      payload.mercado &&
-      payload.veredito
+  return (
+    isOperacaoPayload(value.operacao) &&
+    isAnalisePayload(value.analise) &&
+    isMercadoPayload(value.mercado) &&
+    isVereditoPayload(value.veredito) &&
+    (value.imagemBase64 === undefined ||
+      value.imagemBase64 === null ||
+      isString(value.imagemBase64)) &&
+    (value.reportMode === undefined || isReportMode(value.reportMode))
   );
 }
 

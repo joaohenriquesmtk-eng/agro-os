@@ -61,9 +61,17 @@ export type HistoryEntry = {
   vereditoSistema?: "AUTORIZADO" | "RISCO_ELEVADO" | "BLOQUEADO" | string;
   talhao?: string;
   modo?: string;
+  modoRelatorio?: string;
   parecerIA?: string;
   cultura?: string;
+  regiao?: string;
+  faseFenologica?: string;
   areaAfetada?: number;
+  roiProjetado?: number;
+  sistemaProdutivo?: string | null;
+  fatorLimitanteTecnico?: string;
+  fatorLimitanteEconomico?: string | null;
+  severidadeContextoComplementar?: "BAIXA" | "MODERADA" | "ALTA" | null;
   providerUsed?: ProviderName | null;
   totalDurationMs?: number | null;
   telemetryPersisted?: boolean;

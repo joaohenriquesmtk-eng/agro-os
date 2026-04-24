@@ -15,6 +15,18 @@ export interface CachedReportMetadata {
   faseFenologica: string;
   statusVeredito: StatusVeredito;
   sistemaProdutivo: string | null;
+
+  phSolo: number;
+  ctc: number;
+  materiaOrganica: number;
+  saturacaoBases: number;
+  teorArgila: number;
+  chuva7dMm: number;
+
+  fatorLimitanteTecnico: string;
+  fatorLimitanteEconomico: string | null;
+  severidadeContextoComplementar: "BAIXA" | "MODERADA" | "ALTA" | null;
+
   modoRelatorio: ReportMode;
   possuiMapa: boolean;
   fallback: boolean;
@@ -47,10 +59,24 @@ export interface HistoryFirestoreEntry {
   cultura: CulturaBrasil;
   regiao: RegiaoBrasil;
   faseFenologica: string;
+
   fosforo: number;
+  potassio: number;
+  phSolo: number;
+  ctc: number;
+  materiaOrganica: number;
+  saturacaoBases: number;
+  teorArgila: number;
+  chuva7dMm: number;
+
   areaAfetada: number;
   roiProjetado: number;
   vereditoSistema: StatusVeredito;
+
+  fatorLimitanteTecnico: string;
+  fatorLimitanteEconomico: string | null;
+  severidadeContextoComplementar: "BAIXA" | "MODERADA" | "ALTA" | null;
+
   parecerIA: string;
   modo: HistoryEntryMode;
   modoRelatorio: ReportMode;

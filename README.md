@@ -41,6 +41,12 @@ O núcleo do sistema processa:
 - produtividade-alvo
 - fósforo (Mehlich)
 - potássio
+- pH do solo
+- CTC
+- matéria orgânica
+- saturação por bases
+- teor de argila
+- chuva recente (7 dias)
 - área de anomalia
 - leitura de mercado
 - plausibilidade sazonal por cultura, sistema e região
@@ -50,9 +56,14 @@ A partir disso, o motor calcula:
 - classes de fertilidade para P e K
 - pressão nutricional
 - doses estimadas de MAP, KCl e ureia
+- resposta marginal esperada
 - leitura econômica da intervenção
 - ROI incremental estimado
 - margem sobre custo
+- score de confiança
+- fator limitante técnico/pedoclimático
+- fator limitante econômico
+- diagnóstico complementar do contexto
 - status final do cenário:
   - **AUTORIZADO**
   - **RISCO ELEVADO**
@@ -175,7 +186,7 @@ Responsável por:
 - orquestração de provedores
 - fallback local
 - telemetria da rota
-- cache por assinatura de cenário
+- cache por assinatura expandida de cenário
 
 ### 4. Camada de interface
 Responsável por:
@@ -217,6 +228,10 @@ O sistema não responde apenas com um texto final. Ele expõe:
 - leitura econômica
 - coerência sazonal
 - classes de solo interpretadas
+- fator limitante técnico/pedoclimático
+- fator limitante econômico
+- diagnóstico complementar do contexto
+- score de confiança do motor
 
 ### Arquitetura resiliente de laudo
 A camada de IA não é um ponto único de falha.  
@@ -225,6 +240,18 @@ A geração refinada usa roteamento multi-provedor com fallback local e telemetr
 ### Posicionamento agronômico
 O Agro OS não foi pensado como “dashboard genérico”.  
 Ele foi concebido como um **sistema de suporte à decisão agronômica e econômica**, com foco em contexto produtivo brasileiro, especialmente Cerrado e Centro-Oeste.
+
+### Rastreabilidade de decisão
+O Agro OS preserva o encadeamento da decisão entre:
+
+- entrada operacional
+- diagnóstico agronômico
+- leitura econômica
+- fatores limitantes
+- laudo gerado
+- histórico e cache por cenário
+
+Isso reduz o risco de respostas desalinhadas entre motor, interface e laudo.
 
 ---
 
@@ -244,8 +271,8 @@ Isso significa que o módulo econômico já é útil para simulação e triagem,
 ### 2. Camada climática orientativa
 Os alertas climáticos atuais devem ser interpretados como apoio operacional, não como recomendação meteorológica definitiva para manejo.
 
-### 3. Variáveis agronômicas ainda em expansão no motor
-O sistema já armazena variáveis adicionais como:
+### 3. Calibração agronômica complementar ainda em evolução
+O sistema já integra de forma ativa variáveis adicionais como:
 
 - pH
 - CTC
@@ -254,7 +281,9 @@ O sistema já armazena variáveis adicionais como:
 - teor de argila
 - chuva recente
 
-Esses parâmetros já fazem parte da estrutura do projeto, mas a integração deles no veredito agronômico central ainda está em evolução.
+Esses parâmetros já participam do veredito, da confiança do motor, do diagnóstico complementar e da separação entre limitantes técnicos e econômicos.
+
+O que ainda está em evolução não é mais a presença dessas variáveis na lógica, e sim o aprofundamento da calibragem agronômica para diferentes culturas, regiões e contextos operacionais.
 
 ### 4. Escopo atual
 O Agro OS hoje é um sistema de triagem, interpretação e emissão de parecer técnico executivo.  
