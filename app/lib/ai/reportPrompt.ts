@@ -37,6 +37,23 @@ export function buildImageDataUrl(imagemBase64?: string | null) {
 
 export function buildTechnicalReportPrompt(input: ReportGenerationInput) {
   const { operacao, analise, mercado, veredito, imagemBase64 } = input;
+  const fatorLimitanteTecnico = toLine(
+    veredito?.fatorLimitanteTecnico || veredito?.fatorLimitante
+  );
+  const fatorLimitanteEconomico = toLine(
+    veredito?.fatorLimitanteEconomico ||
+      "Sem limitante econômico crítico identificado."
+  );
+  const diagnosticoSolo = veredito?.diagnosticoSolo;
+  const leituraPh = toLine(diagnosticoSolo?.leituraPh);
+  const leituraCtc = toLine(diagnosticoSolo?.leituraCtc);
+  const leituraMateriaOrganica = toLine(diagnosticoSolo?.leituraMateriaOrganica);
+  const leituraSaturacaoBases = toLine(diagnosticoSolo?.leituraSaturacaoBases);
+  const leituraTexturaSolo = toLine(diagnosticoSolo?.leituraTexturaSolo);
+  const leituraChuvaRecente = toLine(diagnosticoSolo?.leituraChuvaRecente);
+  const severidadeComplementar = toLine(
+    diagnosticoSolo?.severidadeContextoComplementar
+  );
 
   const dataAtual = new Intl.DateTimeFormat("pt-BR", {
     day: "numeric",
@@ -59,6 +76,7 @@ REGRAS:
 - Não invente causalidade forte
 - Não floreie
 - Não contradiga os dados do motor
+- Quando houver dois fatores limitantes, diferencie explicitamente o técnico/pedoclimático do econômico
 - Escreva como parecer técnico sóbrio
 
 DADOS:
@@ -69,6 +87,12 @@ DADOS:
 - Área: ${toLine(analise.areaEstresseHa)} ha
 - P: ${toLine(operacao.fosforoMehlich)} mg/dm³
 - K: ${toLine(operacao.potassio)} cmolc/dm³
+- pH do solo: ${toLine(operacao.phSolo)}
+- CTC: ${toLine(operacao.ctc)}
+- Matéria orgânica: ${toLine(operacao.materiaOrganica)}%
+- Saturação por bases: ${toLine(operacao.saturacaoBases)}%
+- Teor de argila: ${toLine(operacao.teorArgila)}%
+- Chuva 7 dias: ${toLine(analise.chuva7dMm)} mm
 - Produtividade alvo: ${toLine(operacao.produtividadeAlvo)}
 - Dólar: ${toCurrency(mercado.dolarPtax)}
 - MAP: ${toCurrency(mercado.custoMapTon)}/t
@@ -76,12 +100,20 @@ DADOS:
 - UREIA: ${toCurrency(mercado.custoUreaTon)}/t
 - Status do sistema: ${toLine(veredito?.status)}
 - Justificativa: ${toLine(veredito?.justificativa)}
-- Fator limitante: ${toLine(veredito?.fatorLimitante)}
+- Fator limitante técnico/pedoclimático: ${fatorLimitanteTecnico}
+- Fator limitante econômico: ${fatorLimitanteEconomico}
 - Sistema produtivo: ${toLine(veredito?.analiseSazonal?.sistemaProdutivo)}
 - Plausibilidade sazonal: ${toLine(veredito?.analiseSazonal?.plausibilidade)}
 - Janela padrão: ${toLine(veredito?.analiseSazonal?.janelaEsperada)}
 - Observação sazonal: ${toLine(veredito?.analiseSazonal?.observacao)}
 - Classificação financeira: ${toLine(veredito?.classificacaoFinanceira)}
+- Leitura de pH: ${leituraPh}
+- Leitura de CTC: ${leituraCtc}
+- Leitura de matéria orgânica: ${leituraMateriaOrganica}
+- Leitura de saturação por bases: ${leituraSaturacaoBases}
+- Leitura de textura do solo: ${leituraTexturaSolo}
+- Leitura de chuva recente: ${leituraChuvaRecente}
+- Severidade complementar: ${severidadeComplementar}
 - Custo total: ${toCurrency(veredito?.leituraEconomica?.custoTotalAdubacao)}
 - Retorno estimado: ${toCurrency(veredito?.leituraEconomica?.retornoFinanceiroEstimado)}
 - ROI incremental: ${
@@ -98,8 +130,9 @@ FORMATO:
 - Depois faça:
   **1. Fatos observados**
   **2. Interpretação técnica**
-  **3. Leitura econômica**
-  **4. Conclusão técnica**
+  **3. Diagnóstico complementar do contexto**
+  **4. Leitura econômica**
+  **5. Conclusão técnica**
 - Finalize com:
   PARECER OPERACIONAL:
   **${getParecerOperacionalFinal((veredito?.status || "BLOQUEADO") as StatusSistema)}**

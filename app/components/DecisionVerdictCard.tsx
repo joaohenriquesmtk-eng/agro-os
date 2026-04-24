@@ -112,8 +112,17 @@ export default function DecisionVerdictCard({ veredito }: DecisionVerdictCardPro
               {veredito.justificativa}
             </p>
             <p className="text-slate-400 leading-relaxed text-sm md:text-base">
-              <span className="font-semibold text-slate-300">Fator Pedoclimático:</span>{" "}
-              {veredito.fatorLimitante}
+              <span className="font-semibold text-slate-300">
+                Fator Limitante Técnico/Pedoclimático:
+              </span>{" "}
+              {veredito.fatorLimitanteTecnico || veredito.fatorLimitante}
+            </p>
+
+            <p className="text-slate-400 leading-relaxed text-sm md:text-base">
+              <span className="font-semibold text-slate-300">
+                Fator Limitante Econômico:
+              </span>{" "}
+              {veredito.fatorLimitanteEconomico || "Sem limitante econômico crítico identificado."}
             </p>
           </div>
 
@@ -205,6 +214,54 @@ export default function DecisionVerdictCard({ veredito }: DecisionVerdictCardPro
                   <span className="text-slate-400">Pressão nutricional</span>
                   <span className="text-slate-200 font-medium">
                     {veredito.diagnosticoSolo.pressaoNutricional || "N/D"}
+                  </span>
+                </p>
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Leitura de pH</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.diagnosticoSolo.leituraPh || "N/D"}
+                  </span>
+                </p>
+
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Leitura de CTC</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.diagnosticoSolo.leituraCtc || "N/D"}
+                  </span>
+                </p>
+
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Matéria orgânica</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.diagnosticoSolo.leituraMateriaOrganica || "N/D"}
+                  </span>
+                </p>
+
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Saturação por bases</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.diagnosticoSolo.leituraSaturacaoBases || "N/D"}
+                  </span>
+                </p>
+
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Textura do solo</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.diagnosticoSolo.leituraTexturaSolo || "N/D"}
+                  </span>
+                </p>
+
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Chuva recente</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.diagnosticoSolo.leituraChuvaRecente || "N/D"}
+                  </span>
+                </p>
+
+                <p className="flex justify-between gap-3">
+                  <span className="text-slate-400">Severidade complementar</span>
+                  <span className="text-slate-200 font-medium">
+                    {veredito.diagnosticoSolo.severidadeContextoComplementar || "N/D"}
                   </span>
                 </p>
                 <p className="flex justify-between gap-3">

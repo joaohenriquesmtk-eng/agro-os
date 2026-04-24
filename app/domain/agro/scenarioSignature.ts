@@ -75,8 +75,10 @@ export interface ScenarioSignatureInput {
 }
 
 export function buildScenarioFingerprint(input: ScenarioSignatureInput) {
+  const culturaNormalizada = normalizeText(input.operacao.cultura);
+
   return {
-    cultura: normalizeText(input.operacao.cultura),
+    cultura: culturaNormalizada,
     regiao: normalizeText(input.operacao.regiao),
     talhao: normalizeText(input.operacao.talhao),
     faseFenologica: normalizeText(input.analise.faseFenologica),
@@ -91,7 +93,7 @@ export function buildScenarioFingerprint(input: ScenarioSignatureInput) {
     custoUreaTon: normalizeNumber(input.mercado.custoUreaTon, 2),
     statusMercado: normalizeText(input.mercado.statusMercado),
     cotacaoCultura: normalizeNumber(
-      input.mercado.cotacoes?.[String(input.operacao.cultura ?? "")],
+      input.mercado.cotacoes?.[culturaNormalizada],
       2
     ),
     status: normalizeText(input.veredito.status),

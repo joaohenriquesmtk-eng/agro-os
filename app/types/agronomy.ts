@@ -32,6 +32,15 @@ export interface VereditoDiagnosticoSolo {
   classeFosforo: string;
   classePotassio: string;
   pressaoNutricional: string;
+
+  leituraPh: string;
+  leituraCtc: string;
+  leituraMateriaOrganica: string;
+  leituraSaturacaoBases: string;
+  leituraTexturaSolo: string;
+  leituraChuvaRecente: string;
+
+  severidadeContextoComplementar: "BAIXA" | "MODERADA" | "ALTA";
 }
 
 export interface VereditoFinal {
@@ -39,6 +48,8 @@ export interface VereditoFinal {
   roiEstimado: number;
   justificativa: string;
   fatorLimitante: string;
+  fatorLimitanteTecnico: string;
+  fatorLimitanteEconomico: string | null;
   doseMapHa: number;
   doseKclHa: number;
   doseUreaHa: number;

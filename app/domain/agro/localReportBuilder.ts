@@ -48,6 +48,20 @@ export function buildLocalTechnicalReport(input: LocalTechnicalReportInput) {
   const plausibilidadeSazonal = veredito.analiseSazonal?.plausibilidade || "N/D";
   const janelaPadrao = veredito.analiseSazonal?.janelaEsperada || "N/D";
   const observacaoSazonal = veredito.analiseSazonal?.observacao || "N/D";
+  const fatorLimitanteTecnico =
+    veredito.fatorLimitanteTecnico || veredito.fatorLimitante || "N/D";
+  const fatorLimitanteEconomico =
+    veredito.fatorLimitanteEconomico || "Sem limitante econômico crítico identificado.";
+  const diagnosticoSolo = veredito.diagnosticoSolo;
+  const leituraPh = diagnosticoSolo?.leituraPh || "N/D";
+  const leituraCtc = diagnosticoSolo?.leituraCtc || "N/D";
+  const leituraMateriaOrganica = diagnosticoSolo?.leituraMateriaOrganica || "N/D";
+  const leituraSaturacaoBases =
+    diagnosticoSolo?.leituraSaturacaoBases || "N/D";
+  const leituraTexturaSolo = diagnosticoSolo?.leituraTexturaSolo || "N/D";
+  const leituraChuvaRecente = diagnosticoSolo?.leituraChuvaRecente || "N/D";
+  const severidadeComplementar =
+    diagnosticoSolo?.severidadeContextoComplementar || "N/D";
 
   const modoEconomico = veredito.leituraEconomica?.modoAnalise || "N/D";
   const custoTotal = veredito.leituraEconomica?.custoTotalAdubacao ?? 0;
@@ -68,12 +82,22 @@ export function buildLocalTechnicalReport(input: LocalTechnicalReportInput) {
     `• Sistema produtivo interpretado pelo motor: **${sistemaProdutivo}**.`,
     "",
     "**2. Interpretação técnica**",
-    `• O fator pedoclimático dominante apontado pelo motor foi **${toLine(veredito.fatorLimitante)}**.`,
+    `• O fator limitante técnico/pedoclimático apontado pelo motor foi **${toLine(fatorLimitanteTecnico)}**.`,
+    `• O fator limitante econômico foi **${toLine(fatorLimitanteEconomico)}**.`,
     `• A plausibilidade sazonal foi classificada como **${plausibilidadeSazonal}**, com janela padrão **${janelaPadrao}**.`,
     `• Observação sazonal do sistema: ${observacaoSazonal}.`,
     `• As doses calculadas foram **MAP ${Number(veredito.doseMapHa || 0).toFixed(0)} kg/ha**, **KCL ${Number(veredito.doseKclHa || 0).toFixed(0)} kg/ha** e **UREIA ${Number(veredito.doseUreaHa || 0).toFixed(0)} kg/ha**.`,
     "",
-    "**3. Leitura econômica**",
+    "**3. Diagnóstico complementar do contexto**",
+    `• Leitura de pH: **${leituraPh}**.`,
+    `• Leitura de CTC: **${leituraCtc}**.`,
+    `• Matéria orgânica: **${leituraMateriaOrganica}**.`,
+    `• Saturação por bases: **${leituraSaturacaoBases}**.`,
+    `• Textura do solo: **${leituraTexturaSolo}**.`,
+    `• Chuva recente: **${leituraChuvaRecente}**.`,
+    `• Severidade complementar do cenário: **${severidadeComplementar}**.`,
+    "",
+    "**4. Leitura econômica**",
     `• Modo econômico: **${modoEconomico}**.`,
     `• Custo total estimado: **${toCurrency(custoTotal)}**.`,
     `• Retorno financeiro estimado: **${toCurrency(retornoEstimado)}**.`,
@@ -82,7 +106,7 @@ export function buildLocalTechnicalReport(input: LocalTechnicalReportInput) {
     `• Custo evitado: **${toCurrency(custoEvitado)}**.`,
     `• Dólar PTAX de referência: **${toCurrency(mercado.dolarPtax)}**.`,
     "",
-    "**4. Conclusão técnica**",
+    "**5. Conclusão técnica**",
     `• O status final calculado pelo motor foi **${statusSistema}**.`,
     `• A justificativa central do sistema foi: **${toLine(veredito.justificativa)}**.`,
     `• Este laudo foi emitido em **modo local**, com origem **${origem}**.`,

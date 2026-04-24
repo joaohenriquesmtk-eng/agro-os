@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { buildLocalTechnicalReport } from "../domain/agro/localReportBuilder";
@@ -47,11 +47,30 @@ export function useReportGeneration({
   const [gerandoIA, setGerandoIA] = useState(false);
   const [relatorioExecutivo, setRelatorioExecutivo] = useState<string | null>(null);
   const [reportRuntime, setReportRuntime] = useState<ReportRuntimeState | null>(null);
+  const scenarioStateKey = JSON.stringify({
+    operacao,
+    analise,
+    mercado,
+    imagemMapa,
+    reportMode,
+    veredito,
+  });
+
+  useEffect(() => {
+    if (latestScenarioKeyRef.current !== scenarioStateKey) {
+      latestScenarioKeyRef.current = scenarioStateKey;
+      setRelatorioExecutivo(null);
+      setReportRuntime(null);
+    }
+  }, [scenarioStateKey]);
+
+  const latestScenarioKeyRef = useRef(scenarioStateKey);
 
   const handleGerarRelatorioIA = async () => {
     if (!veredito || gerandoIA) return;
 
     setGerandoIA(true);
+    const scenarioKeyAtRequestStart = latestScenarioKeyRef.current;
 
     try {
       const { signature, fingerprint } = await buildScenarioSignature({
@@ -84,6 +103,10 @@ export function useReportGeneration({
           [];
 
         const telemetryPersisted = !!cached.metadata?.telemetryPersisted;
+
+        if (latestScenarioKeyRef.current !== scenarioKeyAtRequestStart) {
+          return;
+        }
 
         setRelatorioExecutivo(cached.relatorio);
         setReportRuntime({
@@ -136,6 +159,10 @@ export function useReportGeneration({
           veredito,
           origem: "MOTOR LOCAL (ACIONAMENTO DIRETO)",
         });
+
+        if (latestScenarioKeyRef.current !== scenarioKeyAtRequestStart) {
+          return;
+        }
 
         setRelatorioExecutivo(relatorioLocal);
         setReportRuntime({
@@ -242,6 +269,10 @@ export function useReportGeneration({
       const providerUsed: ProviderName | null = data.providerUsed || null;
       const routeTelemetry: RouteTelemetrySummary | null = data.routeTelemetry || null;
       const telemetryPersisted = !!data.telemetryPersisted;
+
+      if (latestScenarioKeyRef.current !== scenarioKeyAtRequestStart) {
+        return;
+      }
 
       setRelatorioExecutivo(data.relatorio);
       setReportRuntime({

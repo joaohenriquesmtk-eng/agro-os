@@ -49,6 +49,11 @@ function normalizeOperacao(operacao: DadosOperacionais): DadosOperacionais {
     produtividadeAlvo: clamp(safe(operacao.produtividadeAlvo, 0), 0, 500),
     fosforoMehlich: clamp(safe(operacao.fosforoMehlich, 0), 0, 200),
     potassio: clamp(safe(operacao.potassio, 0), 0, 3),
+    phSolo: clamp(safe(operacao.phSolo, 5.5), 3.8, 8.5),
+    ctc: clamp(safe(operacao.ctc, 8), 0, 40),
+    materiaOrganica: clamp(safe(operacao.materiaOrganica, 2.5), 0, 12),
+    saturacaoBases: clamp(safe(operacao.saturacaoBases, 50), 0, 100),
+    teorArgila: clamp(safe(operacao.teorArgila, 35), 0, 90),
   };
 }
 
@@ -58,6 +63,7 @@ function normalizeAnalise(analise: AnaliseEspectral): AnaliseEspectral {
     areaEstresseHa: clamp(safe(analise.areaEstresseHa, 0), 0, 100000),
     faseFenologica: (analise.faseFenologica || "").trim(),
     indice: (analise.indice || "").trim(),
+    chuva7dMm: clamp(safe(analise.chuva7dMm, 20), 0, 300),
   };
 }
 
@@ -209,6 +215,230 @@ function getRegionalParams(regiao: RegiaoBrasil) {
   return map[regiao];
 }
 
+type AgronomicSeverity = "BAIXA" | "MODERADA" | "ALTA";
+
+interface AgronomicContextModifiers {
+  responsePFactor: number;
+  responseKFactor: number;
+  responseNFactor: number;
+  confidenceDelta: number;
+  severity: AgronomicSeverity;
+  fatores: string[];
+  premissas: string[];
+}
+
+function buildAgronomicContextModifiers(input: {
+  operacao: DadosOperacionais;
+  analise: AnaliseEspectral;
+  cultura: CulturaBrasil;
+  phaseBucket: ReturnType<typeof detectPhaseBucket>;
+}): AgronomicContextModifiers {
+  const { operacao, analise, phaseBucket } = input;
+
+  let responsePFactor = 1;
+  let responseKFactor = 1;
+  let responseNFactor = 1;
+  let confidenceDelta = 0;
+
+  const fatores: string[] = [];
+  const premissas: string[] = [];
+
+  let moderateSignals = 0;
+  let severeSignals = 0;
+
+  const registerModerate = () => {
+    moderateSignals += 1;
+  };
+
+  const registerSevere = () => {
+    severeSignals += 1;
+  };
+
+  // pH
+  if (operacao.phSolo < 5) {
+    responsePFactor *= 0.78;
+    responseKFactor *= 0.84;
+    responseNFactor *= 0.8;
+    confidenceDelta -= 0.6;
+    registerSevere();
+    fatores.push(
+      `pH muito baixo (${round2(operacao.phSolo)}), com forte restrição à eficiência agronômica da intervenção.`
+    );
+  } else if (operacao.phSolo < 5.5) {
+    responsePFactor *= 0.9;
+    responseKFactor *= 0.93;
+    responseNFactor *= 0.9;
+    confidenceDelta -= 0.3;
+    registerModerate();
+    fatores.push(
+      `pH abaixo da faixa de maior eficiência (${round2(operacao.phSolo)}), reduzindo resposta esperada.`
+    );
+  } else if (operacao.phSolo > 6.8) {
+    responsePFactor *= 0.95;
+    responseKFactor *= 0.97;
+    responseNFactor *= 0.96;
+    confidenceDelta -= 0.1;
+    registerModerate();
+    fatores.push(
+      `pH acima da faixa mais estável para resposta nutricional (${round2(operacao.phSolo)}).`
+    );
+  } else {
+    confidenceDelta += 0.08;
+  }
+
+  // CTC
+  if (operacao.ctc < 6) {
+    responsePFactor *= 0.92;
+    responseKFactor *= 0.82;
+    responseNFactor *= 0.86;
+    confidenceDelta -= 0.4;
+    registerSevere();
+    fatores.push(
+      `CTC muito baixa (${round2(operacao.ctc)}), com menor capacidade tampão e maior instabilidade de resposta.`
+    );
+  } else if (operacao.ctc < 10) {
+    responsePFactor *= 0.97;
+    responseKFactor *= 0.92;
+    responseNFactor *= 0.94;
+    confidenceDelta -= 0.18;
+    registerModerate();
+    fatores.push(
+      `CTC moderadamente baixa (${round2(operacao.ctc)}), reduzindo retenção e previsibilidade da resposta.`
+    );
+  } else if (operacao.ctc >= 15) {
+    responseKFactor *= 1.03;
+    responseNFactor *= 1.02;
+    confidenceDelta += 0.06;
+  }
+
+  // Matéria orgânica
+  if (operacao.materiaOrganica < 2) {
+    responsePFactor *= 0.96;
+    responseKFactor *= 0.97;
+    responseNFactor *= 0.88;
+    confidenceDelta -= 0.28;
+    registerModerate();
+    fatores.push(
+      `Matéria orgânica baixa (${round2(operacao.materiaOrganica)}%), reduzindo resiliência biológica e resposta ao manejo.`
+    );
+  } else if (operacao.materiaOrganica >= 4) {
+    responseNFactor *= 1.06;
+    confidenceDelta += 0.05;
+  }
+
+  // Saturação por bases
+  if (operacao.saturacaoBases < 40) {
+    responsePFactor *= 0.88;
+    responseKFactor *= 0.9;
+    responseNFactor *= 0.9;
+    confidenceDelta -= 0.35;
+    registerSevere();
+    fatores.push(
+      `Saturação por bases baixa (${round2(operacao.saturacaoBases)}%), sugerindo ambiente químico menos favorável.`
+    );
+  } else if (operacao.saturacaoBases < 55) {
+    responsePFactor *= 0.95;
+    responseKFactor *= 0.97;
+    responseNFactor *= 0.96;
+    confidenceDelta -= 0.15;
+    registerModerate();
+    fatores.push(
+      `Saturação por bases intermediária (${round2(operacao.saturacaoBases)}%), com ambiente ainda não ideal.`
+    );
+  } else if (operacao.saturacaoBases >= 65) {
+    confidenceDelta += 0.08;
+  }
+
+  // Teor de argila
+  if (operacao.teorArgila < 20) {
+    responsePFactor *= 1.02;
+    responseKFactor *= 0.88;
+    responseNFactor *= 0.9;
+    confidenceDelta -= 0.25;
+    registerModerate();
+    fatores.push(
+      `Solo mais arenoso (${round2(operacao.teorArgila)}% de argila), com maior vulnerabilidade a perdas e menor estabilidade do K.`
+    );
+  } else if (operacao.teorArgila > 60) {
+    responsePFactor *= 0.9;
+    responseKFactor *= 1.03;
+    confidenceDelta -= 0.12;
+    registerModerate();
+    fatores.push(
+      `Solo muito argiloso (${round2(operacao.teorArgila)}% de argila), com maior chance de forte adsorção de fósforo.`
+    );
+  }
+
+  // Chuva recente
+  const chuva7d = analise.chuva7dMm;
+
+  if (chuva7d < 8) {
+    responsePFactor *= 0.82;
+    responseKFactor *= 0.8;
+    responseNFactor *= 0.76;
+    confidenceDelta -= 0.45;
+    registerSevere();
+    fatores.push(
+      `Chuva muito baixa nos últimos 7 dias (${round2(chuva7d)} mm), limitando incorporação e resposta provável.`
+    );
+  } else if (chuva7d < 15) {
+    responsePFactor *= 0.92;
+    responseKFactor *= 0.9;
+    responseNFactor *= 0.88;
+    confidenceDelta -= 0.18;
+    registerModerate();
+    fatores.push(
+      `Chuva recente limitada (${round2(chuva7d)} mm), reduzindo eficiência potencial da intervenção.`
+    );
+  } else if (chuva7d > 120) {
+    responsePFactor *= 0.9;
+    responseKFactor *= 0.84;
+    responseNFactor *= 0.8;
+    confidenceDelta -= 0.35;
+    registerSevere();
+    fatores.push(
+      `Chuva excessiva nos últimos 7 dias (${round2(chuva7d)} mm), elevando risco de perdas e resposta instável.`
+    );
+  } else if (chuva7d > 85) {
+    responsePFactor *= 0.96;
+    responseKFactor *= 0.92;
+    responseNFactor *= 0.9;
+    confidenceDelta -= 0.14;
+    registerModerate();
+    fatores.push(
+      `Chuva elevada nos últimos 7 dias (${round2(chuva7d)} mm), aumentando risco operacional.`
+    );
+  } else {
+    if (phaseBucket === "vegetativo" || phaseBucket === "reprodutivo") {
+      confidenceDelta += 0.06;
+    }
+  }
+
+  premissas.push(
+    "O motor agora modula a resposta esperada pela condição química do solo, textura e chuva recente, além de P, K, fase, mercado e sazonalidade."
+  );
+  premissas.push(
+    "pH, CTC, matéria orgânica, saturação por bases, teor de argila e chuva de 7 dias atuam como fatores de eficiência agronômica e confiança, não como recomendação laboratorial oficial."
+  );
+
+  const severity: AgronomicSeverity =
+    severeSignals >= 2 || (severeSignals >= 1 && moderateSignals >= 2)
+      ? "ALTA"
+      : severeSignals >= 1 || moderateSignals >= 2
+      ? "MODERADA"
+      : "BAIXA";
+
+  return {
+    responsePFactor: clamp(responsePFactor, 0.6, 1.08),
+    responseKFactor: clamp(responseKFactor, 0.6, 1.08),
+    responseNFactor: clamp(responseNFactor, 0.6, 1.1),
+    confidenceDelta,
+    severity,
+    fatores,
+    premissas,
+  };
+}
+
 function getFinancialClassification(
   modo: ModoAnaliseEconomica,
   roi: number,
@@ -222,6 +452,319 @@ function getFinancialClassification(
   return "ROBUSTO";
 }
 
+function resolveTechnicalLimitingFactor(input: {
+  operacao: DadosOperacionais;
+  analise: AnaliseEspectral;
+  classeP: ClasseNutriente;
+  classeK: ClasseNutriente;
+  analiseSazonal: SeasonalAnalysis;
+  responseGlobal: number;
+  severity: "BAIXA" | "MODERADA" | "ALTA";
+  riscoRegional: string;
+}) {
+  const {
+    operacao,
+    analise,
+    classeP,
+    classeK,
+    analiseSazonal,
+    responseGlobal,
+    severity,
+    riscoRegional,
+  } = input;
+
+  if (analiseSazonal.plausibilidade === "FORA_DO_PADRAO") {
+    return "Incompatibilidade entre fase, cultura e janela agrícola regional.";
+  }
+
+  if (operacao.phSolo < 5) {
+    return "pH muito baixo, com forte restrição à eficiência agronômica da resposta.";
+  }
+
+  if (analise.chuva7dMm < 8) {
+    return "Baixa chuva recente, limitando incorporação e resposta provável da intervenção.";
+  }
+
+  if (analise.chuva7dMm > 120) {
+    return "Excesso de chuva recente, elevando risco de perdas e resposta instável.";
+  }
+
+  if (operacao.saturacaoBases < 40) {
+    return "Saturação por bases baixa, indicando ambiente químico pouco favorável.";
+  }
+
+  if (operacao.ctc < 6) {
+    return "CTC muito baixa, com menor capacidade tampão e maior instabilidade de resposta.";
+  }
+
+  if (classeP === "MUITO_BAIXO" || classeP === "BAIXO") {
+    return `Deficiência de fósforo em faixa ${formatClasse(classeP)}.`;
+  }
+
+  if (classeK === "MUITO_BAIXO" || classeK === "BAIXO") {
+    return `Deficiência de potássio em faixa ${formatClasse(classeK)}.`;
+  }
+
+  if (responseGlobal < 0.38) {
+    return "Resposta agronômica global moderada, reduzindo a robustez operacional da intervenção.";
+  }
+
+  if (severity === "ALTA") {
+    return "Severidade alta no contexto complementar do solo e ambiente.";
+  }
+
+  return riscoRegional;
+}
+
+function resolveEconomicLimitingFactor(input: {
+  modoAnalise: ModoAnaliseEconomica;
+  margemSobreCusto: number | null;
+  roi: number;
+}) {
+  const { modoAnalise, margemSobreCusto, roi } = input;
+
+  if (modoAnalise === "NAO_INTERVENCAO_RECOMENDADA") {
+    return "Intervenção incremental não justificada economicamente neste momento.";
+  }
+
+  if (roi <= 0) {
+    return "Relação de troca desfavorável entre custo da intervenção e retorno incremental esperado.";
+  }
+
+  if (margemSobreCusto !== null && margemSobreCusto < 35) {
+    return "Margem econômica limitada para sustentar a intervenção com robustez.";
+  }
+
+  return null;
+}
+
+function buildDecisionJustification(input: {
+  status: StatusVeredito;
+  modoAnalise: ModoAnaliseEconomica;
+  fatorLimitanteTecnico: string;
+  fatorLimitanteEconomico: string | null;
+  analiseSazonal: SeasonalAnalysis;
+  profileLabel: string;
+  doseMapHa: number;
+  doseKclHa: number;
+  doseUreaHa: number;
+  cultura: CulturaBrasil;
+}) {
+  const {
+    status,
+    modoAnalise,
+    fatorLimitanteTecnico,
+    fatorLimitanteEconomico,
+    analiseSazonal,
+    profileLabel,
+    doseMapHa,
+    doseKclHa,
+    doseUreaHa,
+    cultura,
+  } = input;
+
+  const blocoDose =
+    doseUreaHa > 0
+      ? `MAP(${round2(doseMapHa)}kg), KCL(${round2(doseKclHa)}kg), UREIA(${round2(
+          doseUreaHa
+        )}kg)`
+      : cultura === "SOJA"
+      ? `MAP(${round2(doseMapHa)}kg), KCL(${round2(doseKclHa)}kg), com Fixação de N`
+      : `MAP(${round2(doseMapHa)}kg), KCL(${round2(doseKclHa)}kg)`;
+
+  const sazonalFora =
+    analiseSazonal.plausibilidade === "FORA_DO_PADRAO"
+      ? " A coerência sazonal está fora do padrão regional modelado."
+      : analiseSazonal.plausibilidade === "ATENCAO"
+      ? " A coerência sazonal exige cautela operacional."
+      : "";
+
+  if (modoAnalise === "NAO_INTERVENCAO_RECOMENDADA") {
+    return `A intervenção incremental não foi recomendada. O principal fator técnico identificado foi ${fatorLimitanteTecnico.toLowerCase()}.${
+      fatorLimitanteEconomico
+        ? ` Do ponto de vista econômico, ${fatorLimitanteEconomico.toLowerCase()}.`
+        : ""
+    }${sazonalFora}`;
+  }
+
+  if (status === "BLOQUEADO") {
+    return `A intervenção foi bloqueada. O principal fator técnico identificado foi ${fatorLimitanteTecnico.toLowerCase()}.${
+      fatorLimitanteEconomico
+        ? ` Economicamente, ${fatorLimitanteEconomico.toLowerCase()}.`
+        : ""
+    }${sazonalFora}`;
+  }
+
+  if (status === "RISCO_ELEVADO") {
+    return `A intervenção apresenta viabilidade parcial para ${profileLabel}, com doses calculadas de ${blocoDose}. O principal fator técnico identificado foi ${fatorLimitanteTecnico.toLowerCase()}.${
+      fatorLimitanteEconomico
+        ? ` No eixo econômico, ${fatorLimitanteEconomico.toLowerCase()}.`
+        : " Não foi identificado limitante econômico crítico, porém a robustez operacional permanece moderada."
+    }${sazonalFora}`;
+  }
+
+  return `A intervenção foi autorizada para ${profileLabel}, com doses calculadas de ${blocoDose}. O principal fator técnico identificado foi ${fatorLimitanteTecnico.toLowerCase()}.${
+    fatorLimitanteEconomico
+      ? ` No eixo econômico, ${fatorLimitanteEconomico.toLowerCase()}.`
+      : " Não foi identificado limitante econômico crítico."
+  }${sazonalFora}`;
+}
+
+function resolvePrimaryLimitingFactor(input: {
+  operacao: DadosOperacionais;
+  analise: AnaliseEspectral;
+  classeP: ClasseNutriente;
+  classeK: ClasseNutriente;
+  analiseSazonal: SeasonalAnalysis;
+  margemSobreCusto: number | null;
+  roi: number;
+  responseGlobal: number;
+  severity: "BAIXA" | "MODERADA" | "ALTA";
+  riscoRegional: string;
+}) {
+  const {
+    operacao,
+    analise,
+    classeP,
+    classeK,
+    analiseSazonal,
+    margemSobreCusto,
+    roi,
+    responseGlobal,
+    severity,
+    riscoRegional,
+  } = input;
+
+  if (analiseSazonal.plausibilidade === "FORA_DO_PADRAO") {
+    return "Incompatibilidade entre fase, cultura e janela agrícola regional.";
+  }
+
+  if (roi <= 0) {
+    return "Relação de troca desfavorável entre custo da intervenção e retorno incremental esperado.";
+  }
+
+  if (margemSobreCusto !== null && margemSobreCusto < 35) {
+    return "Margem econômica limitada para sustentar a intervenção com robustez.";
+  }
+
+  if (operacao.phSolo < 5) {
+    return "pH muito baixo, com forte restrição à eficiência agronômica da resposta.";
+  }
+
+  if (operacao.saturacaoBases < 40) {
+    return "Saturação por bases baixa, indicando ambiente químico pouco favorável.";
+  }
+
+  if (operacao.ctc < 6) {
+    return "CTC muito baixa, com menor capacidade tampão e maior instabilidade de resposta.";
+  }
+
+  if (analise.chuva7dMm < 8) {
+    return "Baixa chuva recente, limitando incorporação e resposta provável da intervenção.";
+  }
+
+  if (analise.chuva7dMm > 120) {
+    return "Excesso de chuva recente, elevando risco de perdas e resposta instável.";
+  }
+
+  if (classeP === "MUITO_BAIXO" || classeP === "BAIXO") {
+    return `Deficiência de fósforo em faixa ${formatClasse(classeP)}.`;
+  }
+
+  if (classeK === "MUITO_BAIXO" || classeK === "BAIXO") {
+    return `Deficiência de potássio em faixa ${formatClasse(classeK)}.`;
+  }
+
+  if (responseGlobal < 0.38) {
+    return "Resposta agronômica global moderada, reduzindo a robustez operacional da intervenção.";
+  }
+
+  if (severity === "ALTA") {
+    return "Severidade alta no contexto complementar do solo e ambiente.";
+  }
+
+  return riscoRegional;
+}
+
+function getPhReading(ph: number): string {
+  if (ph < 5) return "MUITO BAIXO";
+  if (ph < 5.5) return "BAIXO";
+  if (ph <= 6.5) return "ADEQUADO";
+  if (ph <= 6.8) return "ALTO";
+  return "MUITO ALTO";
+}
+
+function getCtcReading(ctc: number): string {
+  if (ctc < 6) return "MUITO BAIXA";
+  if (ctc < 10) return "BAIXA";
+  if (ctc < 15) return "MEDIA";
+  if (ctc < 20) return "ALTA";
+  return "MUITO ALTA";
+}
+
+function getOrganicMatterReading(materiaOrganica: number): string {
+  if (materiaOrganica < 2) return "BAIXA";
+  if (materiaOrganica < 3) return "MEDIA_BAIXA";
+  if (materiaOrganica < 4) return "ADEQUADA";
+  return "ALTA";
+}
+
+function getBaseSaturationReading(saturacaoBases: number): string {
+  if (saturacaoBases < 40) return "BAIXA";
+  if (saturacaoBases < 55) return "MEDIA";
+  if (saturacaoBases < 65) return "ADEQUADA";
+  return "ALTA";
+}
+
+function getTextureReading(teorArgila: number): string {
+  if (teorArgila < 20) return "ARENOSO";
+  if (teorArgila < 35) return "TEXTURA_MEDIA";
+  if (teorArgila < 60) return "ARGILOSO";
+  return "MUITO_ARGILOSO";
+}
+
+function getRecentRainReading(chuva7dMm: number): string {
+  if (chuva7dMm < 8) return "MUITO BAIXA";
+  if (chuva7dMm < 15) return "BAIXA";
+  if (chuva7dMm <= 85) return "ADEQUADA";
+  if (chuva7dMm <= 120) return "ALTA";
+  return "EXCESSIVA";
+}
+
+function getComplementaryContextSeverity(
+  operacao: DadosOperacionais,
+  analise: AnaliseEspectral
+): "BAIXA" | "MODERADA" | "ALTA" {
+  let severeSignals = 0;
+  let moderateSignals = 0;
+
+  if (operacao.phSolo < 5) severeSignals += 1;
+  else if (operacao.phSolo < 5.5) moderateSignals += 1;
+
+  if (operacao.ctc < 6) severeSignals += 1;
+  else if (operacao.ctc < 10) moderateSignals += 1;
+
+  if (operacao.materiaOrganica < 2) moderateSignals += 1;
+
+  if (operacao.saturacaoBases < 40) severeSignals += 1;
+  else if (operacao.saturacaoBases < 55) moderateSignals += 1;
+
+  if (operacao.teorArgila < 20 || operacao.teorArgila > 60) moderateSignals += 1;
+
+  if (analise.chuva7dMm < 8 || analise.chuva7dMm > 120) severeSignals += 1;
+  else if (analise.chuva7dMm < 15 || analise.chuva7dMm > 85) moderateSignals += 1;
+
+  if (severeSignals >= 2 || (severeSignals >= 1 && moderateSignals >= 2)) {
+    return "ALTA";
+  }
+
+  if (severeSignals >= 1 || moderateSignals >= 2) {
+    return "MODERADA";
+  }
+
+  return "BAIXA";
+}
+
 function getConfidenceScore(input: {
   mercado: MercadoFinanceiro;
   operacao: DadosOperacionais;
@@ -233,6 +776,7 @@ function getConfidenceScore(input: {
   margemSobreCusto: number | null;
   analiseSazonal: SeasonalAnalysis;
   cultureSpecificityBonus: number;
+  agronomicConfidenceDelta: number;
 }) {
   const {
     mercado,
@@ -245,6 +789,7 @@ function getConfidenceScore(input: {
     margemSobreCusto,
     analiseSazonal,
     cultureSpecificityBonus,
+    agronomicConfidenceDelta,
   } = input;
 
   let score = 5.5;
@@ -263,6 +808,7 @@ function getConfidenceScore(input: {
   else score -= 1.15;
 
   score += cultureSpecificityBonus;
+  score += agronomicConfidenceDelta;
 
   if (modoAnalise === "NAO_INTERVENCAO_RECOMENDADA") {
     score += 0.4;
@@ -325,6 +871,13 @@ export const GeoEngine = {
 
     const marketConfidence = getMarketConfidence(mercado);
 
+    const agronomicContext = buildAgronomicContextModifiers({
+      operacao,
+      analise,
+      cultura: operacao.cultura,
+      phaseBucket,
+    });
+
     const produtividadePressao = clamp(
       safe(operacao.produtividadeAlvo, profile.productivityBase) /
         Math.max(profile.productivityBase, 1),
@@ -345,7 +898,8 @@ export const GeoEngine = {
         regiao.eficienciaBase *
         regiao.penalidadeClimatica *
         marketConfidence *
-        seasonalPenalty,
+        seasonalPenalty *
+        agronomicContext.responsePFactor,
       0,
       1
     );
@@ -356,7 +910,8 @@ export const GeoEngine = {
         regiao.eficienciaBase *
         regiao.penalidadeClimatica *
         marketConfidence *
-        seasonalPenalty,
+        seasonalPenalty *
+        agronomicContext.responseKFactor,
       0,
       1
     );
@@ -416,7 +971,8 @@ export const GeoEngine = {
         regiao.eficienciaBase *
         marketConfidence *
         seasonalPenalty *
-        profile.baseResponse.n;
+        profile.baseResponse.n *
+        agronomicContext.responseNFactor;
 
       if (operacao.cultura === "MILHO") {
         doseUreaHa = round2(clamp(nNeed, 20, 180));
@@ -490,9 +1046,14 @@ export const GeoEngine = {
     let retornoFinanceiroEstimado = retornoFinanceiroEstimadoPotencial;
     let roi = roiIncrementalPotencial;
     let margemSobreCusto = margemSobreCustoPotencial;
+    let fatorLimitanteTecnico = regiao.risco;
+    let fatorLimitanteEconomico: string | null = null;
+    let fatorLimitante = regiao.risco;
 
     const fatoresDeterminantes: string[] = [];
     const premissasCriticas: string[] = [];
+    fatoresDeterminantes.push(...agronomicContext.fatores);
+    premissasCriticas.push(...agronomicContext.premissas);
 
     if (soloJaSuprido && (respostaMarginalMuitoBaixa || semDoseRelevante)) {
       status = "BLOQUEADO";
@@ -622,6 +1183,15 @@ export const GeoEngine = {
       );
     }
 
+    if (agronomicContext.severity === "ALTA" && status === "AUTORIZADO") {
+      status = "RISCO_ELEVADO";
+      justificativa =
+        "A intervenção mantém viabilidade técnica e econômica, porém o contexto químico, físico e hídrico recente reduz a robustez operacional da resposta esperada.";
+      fatoresDeterminantes.push(
+        "O cenário foi rebaixado para RISCO ELEVADO por severidade agronômica alta nas variáveis complementares do solo e ambiente."
+      );
+    }
+
     const cultureSpecificityBonus =
       operacao.cultura === "SOJA"
         ? 0.45
@@ -644,6 +1214,52 @@ export const GeoEngine = {
       margemSobreCusto,
       analiseSazonal,
       cultureSpecificityBonus,
+      agronomicConfidenceDelta: agronomicContext.confidenceDelta,
+    });
+
+    fatorLimitanteTecnico = resolveTechnicalLimitingFactor({
+      operacao,
+      analise,
+      classeP,
+      classeK,
+      analiseSazonal,
+      responseGlobal,
+      severity: agronomicContext.severity,
+      riscoRegional: regiao.risco,
+    });
+
+    fatorLimitanteEconomico = resolveEconomicLimitingFactor({
+      modoAnalise,
+      margemSobreCusto,
+      roi,
+    });
+
+    fatorLimitante = fatorLimitanteEconomico || fatorLimitanteTecnico;
+
+    justificativa = buildDecisionJustification({
+      status,
+      modoAnalise,
+      fatorLimitanteTecnico,
+      fatorLimitanteEconomico,
+      analiseSazonal,
+      profileLabel: profile.productionLabel,
+      doseMapHa: doseMapHaFinal,
+      doseKclHa: doseKclHaFinal,
+      doseUreaHa: doseUreaHaFinal,
+      cultura: operacao.cultura,
+    });
+
+    fatorLimitante = resolvePrimaryLimitingFactor({
+      operacao,
+      analise,
+      classeP,
+      classeK,
+      analiseSazonal,
+      margemSobreCusto,
+      roi,
+      responseGlobal,
+      severity: agronomicContext.severity,
+      riscoRegional: regiao.risco,
     });
 
     const classificacaoFinanceira = getFinancialClassification(
@@ -661,11 +1277,24 @@ export const GeoEngine = {
         ? "Intervenção com retorno positivo, porém sujeita a maior sensibilidade agronômica, econômica ou sazonal."
         : "Intervenção proposta com retorno incremental positivo e margem operacional favorável.";
 
+    const leituraPh = getPhReading(operacao.phSolo);
+    const leituraCtc = getCtcReading(operacao.ctc);
+    const leituraMateriaOrganica = getOrganicMatterReading(operacao.materiaOrganica);
+    const leituraSaturacaoBases = getBaseSaturationReading(operacao.saturacaoBases);
+    const leituraTexturaSolo = getTextureReading(operacao.teorArgila);
+    const leituraChuvaRecente = getRecentRainReading(analise.chuva7dMm);
+    const severidadeContextoComplementar = getComplementaryContextSeverity(
+      operacao,
+      analise
+    );
+
     return {
       status,
       roiEstimado: round2(roi),
       justificativa,
-      fatorLimitante: regiao.risco,
+      fatorLimitante,
+      fatorLimitanteTecnico,
+      fatorLimitanteEconomico,
       doseMapHa: round2(doseMapHaFinal),
       doseKclHa: round2(doseKclHaFinal),
       doseUreaHa: round2(doseUreaHaFinal),
@@ -701,6 +1330,14 @@ export const GeoEngine = {
             : needGlobal >= 0.15
             ? "BAIXA"
             : "MUITO BAIXA",
+
+        leituraPh,
+        leituraCtc,
+        leituraMateriaOrganica,
+        leituraSaturacaoBases,
+        leituraTexturaSolo,
+        leituraChuvaRecente,
+        severidadeContextoComplementar,
       },
       analiseSazonal,
     };

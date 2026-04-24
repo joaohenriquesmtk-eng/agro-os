@@ -183,6 +183,152 @@ export default function AgronomicParametersCard({
           </div>
         </div>
 
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-2 border-t border-slate-800">
+  <div>
+    <label className="block text-[9px] font-bold text-cyan-400 mb-1 uppercase tracking-wider">
+      pH do Solo
+    </label>
+    <input
+      type="number"
+      step="0.1"
+      min={3.5}
+      max={8.5}
+      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none transition-all font-mono"
+      value={operacao.phSolo || ""}
+      onChange={(e) =>
+        onSetOperacao({
+          phSolo: sanitizeNumberInput(e.target.value, {
+            min: 3.5,
+            max: 8.5,
+            fallback: 5.5,
+          }),
+        })
+      }
+      placeholder="Ex: 5.5"
+    />
+  </div>
+
+  <div>
+    <label className="block text-[9px] font-bold text-cyan-400 mb-1 uppercase tracking-wider">
+      CTC
+    </label>
+    <input
+      type="number"
+      step="0.1"
+      min={0}
+      max={40}
+      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none transition-all font-mono"
+      value={operacao.ctc || ""}
+      onChange={(e) =>
+        onSetOperacao({
+          ctc: sanitizeNumberInput(e.target.value, {
+            min: 0,
+            max: 40,
+            fallback: 8,
+          }),
+        })
+      }
+      placeholder="Ex: 8"
+    />
+  </div>
+
+  <div>
+    <label className="block text-[9px] font-bold text-cyan-400 mb-1 uppercase tracking-wider">
+      Matéria Orgânica (%)
+    </label>
+    <input
+      type="number"
+      step="0.1"
+      min={0}
+      max={12}
+      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none transition-all font-mono"
+      value={operacao.materiaOrganica || ""}
+      onChange={(e) =>
+        onSetOperacao({
+          materiaOrganica: sanitizeNumberInput(e.target.value, {
+            min: 0,
+            max: 12,
+            fallback: 2,
+          }),
+        })
+      }
+      placeholder="Ex: 2.5"
+    />
+  </div>
+
+  <div>
+    <label className="block text-[9px] font-bold text-cyan-400 mb-1 uppercase tracking-wider">
+      Saturação por Bases (%)
+    </label>
+    <input
+      type="number"
+      step="1"
+      min={0}
+      max={100}
+      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none transition-all font-mono"
+      value={operacao.saturacaoBases || ""}
+      onChange={(e) =>
+        onSetOperacao({
+          saturacaoBases: sanitizeNumberInput(e.target.value, {
+            min: 0,
+            max: 100,
+            fallback: 50,
+          }),
+        })
+      }
+      placeholder="Ex: 50"
+    />
+  </div>
+
+  <div>
+    <label className="block text-[9px] font-bold text-cyan-400 mb-1 uppercase tracking-wider">
+      Teor de Argila (%)
+    </label>
+    <input
+      type="number"
+      step="1"
+      min={0}
+      max={90}
+      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-cyan-500 outline-none transition-all font-mono"
+      value={operacao.teorArgila || ""}
+      onChange={(e) =>
+        onSetOperacao({
+          teorArgila: sanitizeNumberInput(e.target.value, {
+            min: 0,
+            max: 90,
+            fallback: 45,
+          }),
+        })
+      }
+      placeholder="Ex: 45"
+    />
+  </div>
+
+  <div>
+    <label className="block text-[9px] font-bold text-emerald-400 mb-1 uppercase tracking-wider">
+      Chuva 7 dias (mm)
+    </label>
+    <input
+      type="number"
+      step="1"
+      min={0}
+      max={300}
+      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition-all font-mono"
+      value={analise.chuva7dMm || ""}
+      onChange={(e) =>
+        onSetAnalise({
+          chuva7dMm: sanitizeNumberInput(e.target.value, {
+            min: 0,
+            max: 300,
+            fallback: 10,
+          }),
+        })
+      }
+      placeholder="Ex: 20"
+    />
+  </div>
+</div>
+
         <div>
           <label className="block text-[10px] font-bold text-emerald-400 mb-1 uppercase tracking-wider">
             Área de Anomalia (Hectares)
