@@ -10,11 +10,17 @@ describe("buildScenarioSignature", () => {
       fosforoMehlich: 12,
       potassio: 0.15,
       produtividadeAlvo: 75,
+      phSolo: 5.5,
+      ctc: 8,
+      materiaOrganica: 2,
+      saturacaoBases: 50,
+      teorArgila: 45,
     },
     analise: {
       faseFenologica: "Floração (R1-R2)",
       areaEstresseHa: 10,
       indice: "NDVI (Padrão)",
+      chuva7dMm: 15,
     },
     mercado: {
       dolarPtax: 5.42,

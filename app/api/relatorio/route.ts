@@ -1,7 +1,12 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { buildLocalTechnicalReport } from "../../domain/agro/localReportBuilder";
+import { getAdminAuth } from "../../lib/firebaseAdmin";
+import { SESSION_COOKIE_NAME } from "../../lib/sessionConstants";
+import { buildScenarioSignature } from "../../domain/agro/scenarioSignature";
+import { readCachedReport, writeCachedReport } from "../../lib/reportCache";
 import { getProvidersHealth } from "../../lib/providerHealth";
 import { getTechnicalReportProviderConfig } from "../../lib/ai/providers";
 import { orchestrateRefinedTechnicalReport } from "../../lib/ai/providerOrchestrator";
@@ -290,6 +295,25 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+
+  if (!sessionCookie) {
+    return NextResponse.json(
+      { error: "Acesso negado. Sessão inválida ou não encontrada." },
+      { status: 401 }
+    );
+  }
+
+  try {
+    await getAdminAuth().verifySessionCookie(sessionCookie, true);
+  } catch {
+    return NextResponse.json(
+      { error: "Acesso negado. Sessão expirada ou inválida." },
+      { status: 401 }
+    );
+  }
+
   let dados: ReportGenerationRequest | null = null;
 
   try {
@@ -325,6 +349,31 @@ export async function POST(req: Request) {
       });
     }
 
+    const signatureResult = await buildScenarioSignature({
+      operacao,
+      analise,
+      mercado,
+      veredito,
+    });
+
+    const cachedReport = await readCachedReport(signatureResult.signature);
+
+    if (cachedReport) {
+      const response: RelatorioApiSuccessResponse = {
+        relatorio: cachedReport.relatorio,
+        mode: "IA_REFINADA",
+        fallback: false,
+        warning: "Laudo recuperado do cache. Nenhuma requisição externa foi feita.",
+        providerUsed: cachedReport.metadata?.providerUsed || null,
+        attemptedProviders: [],
+        routeTelemetry: null,
+        telemetryPersisted: false,
+        providersHealth: await getProvidersHealth(["GEMINI", "OPENROUTER", "OPENAI"]),
+        providersConfig: getTechnicalReportProviderConfig(),
+      };
+      return NextResponse.json(response);
+    }
+
     const orchestration = await orchestrateRefinedTechnicalReport({
       operacao,
       analise,
@@ -347,6 +396,16 @@ export async function POST(req: Request) {
     });
 
     if (orchestration.ok) {
+      await writeCachedReport({
+        signature: signatureResult.signature,
+        relatorio: orchestration.relatorio,
+        source: "IA_EXTERNA",
+        fingerprint: signatureResult.fingerprint as Record<string, unknown>,
+        metadata: {
+          providerUsed: orchestration.providerUsed,
+        } as any,
+      });
+
       const response: RelatorioApiSuccessResponse = {
         relatorio: orchestration.relatorio,
         mode: "IA_REFINADA",
