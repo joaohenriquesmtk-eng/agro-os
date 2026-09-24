@@ -295,25 +295,6 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const cookieStore = await cookies();
-  const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-
-  if (!sessionCookie) {
-    return NextResponse.json(
-      { error: "Acesso negado. Sessão inválida ou não encontrada." },
-      { status: 401 }
-    );
-  }
-
-  try {
-    await getAdminAuth().verifySessionCookie(sessionCookie, true);
-  } catch {
-    return NextResponse.json(
-      { error: "Acesso negado. Sessão expirada ou inválida." },
-      { status: 401 }
-    );
-  }
-
   let dados: ReportGenerationRequest | null = null;
 
   try {
